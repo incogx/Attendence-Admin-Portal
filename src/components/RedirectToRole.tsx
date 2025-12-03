@@ -1,32 +1,42 @@
 // src/components/RedirectToRole.tsx
-import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
 
 export default function RedirectToRole() {
   const navigate = useNavigate();
-  const { user, profile, adminUser } = useAuth() as any; // support both naming conventions
+  const { user, profile, loading } = useAuth() as any;
 
   useEffect(() => {
-    // If not signed in, go to login
+    // Wait until initial auth/profile load finishes
+    if (loading) return;
+
+    // If not signed in, go to login (replace so back doesn't return here)
     if (!user) {
-      navigate('/login', { replace: true });
+      navigate("/login", { replace: true });
       return;
     }
 
-    // Profile may be stored as `profile` or `adminUser` depending on your AuthContext
-    const p = profile ?? adminUser ?? null;
-    const role = p?.role ?? null;
+    // If signed in but profile missing (meaning not found / role unknown), show no-access
+    if (!profile) {
+      navigate("/no-access", { replace: true });
+      return;
+    }
 
     // Normalize role to uppercase if needed
-    const r = typeof role === 'string' ? role.toUpperCase() : role;
+    const role = typeof profile.role === "string" ? profile.role.toUpperCase().trim() : profile.role;
 
-    if (r === 'ADMIN') navigate('/admin', { replace: true });
-    else if (r === 'HOD') navigate('/hod', { replace: true });
-    else if (r === 'FACULTY') navigate('/faculty', { replace: true });
-    else navigate('/no-access', { replace: true });
-
-  }, [user, profile, adminUser, navigate]);
+    if (role === "ADMIN") {
+      // direct admins to the users management page
+      navigate("/admin/users", { replace: true });
+    } else if (role === "HOD") {
+      navigate("/hod", { replace: true });
+    } else if (role === "FACULTY") {
+      navigate("/faculty", { replace: true });
+    } else {
+      navigate("/no-access", { replace: true });
+    }
+  }, [user, profile, loading, navigate]);
 
   return null;
 }
