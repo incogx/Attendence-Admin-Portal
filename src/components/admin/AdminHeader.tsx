@@ -4,12 +4,13 @@ import { useAuth } from "../../contexts/AuthContext";
 import { Link, useNavigate } from "react-router-dom";
 
 function Avatar({ name, size = 40 }: { name?: string | null; size?: number }) {
-  const initials = (name || "")
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((n) => n[0]?.toUpperCase() ?? "")
-    .join("") || (name ? name[0].toUpperCase() : "?");
+  const initials =
+    (name || "")
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((n) => n[0]?.toUpperCase() ?? "")
+      .join("") || (name ? name[0].toUpperCase() : "?");
 
   return (
     <div
@@ -20,8 +21,7 @@ function Avatar({ name, size = 40 }: { name?: string | null; size?: number }) {
         width: size,
         height: size,
         fontSize: Math.max(12, size / 2.7),
-        background:
-          "linear-gradient(135deg, rgba(99,102,241,1) 0%, rgba(139,92,246,1) 100%)",
+        background: "linear-gradient(135deg, rgba(99,102,241,1) 0%, rgba(139,92,246,1) 100%)",
         color: "white",
       }}
     >
@@ -123,7 +123,7 @@ export default function AdminHeader() {
   const mobileMenuRef = useRef<HTMLDivElement | null>(null); // mobile menu
   const firstMenuItemRef = useRef<HTMLButtonElement | null>(null);
 
-  // Close dropdown on outside click or Escape — now checks both desktop + mobile menus
+  // Close dropdown on outside click or Escape — checks both desktop + mobile menus
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
       const target = e.target as Node;
@@ -151,19 +151,27 @@ export default function AdminHeader() {
     }
   }, [menuOpen]);
 
-  const displayName =
-    profile?.full_name ?? user?.user_metadata?.full_name ?? user?.email ?? "Admin";
+  const displayName = profile?.full_name ?? user?.user_metadata?.full_name ?? user?.email ?? "Admin";
   const role = profile?.role ?? "";
 
   async function doSignOut() {
     try {
       setLoadingSignOut(true);
       await signOut();
-      navigate("/login");
+
+      // Clear client-side persisted state to avoid stale UI
+      try {
+        localStorage.clear();
+        sessionStorage.clear();
+      } catch (err) {
+        console.warn("storage clear failed", err);
+      }
+
+      // Replace the current history entry so Back won't return to protected pages
+      window.location.replace("/login");
     } catch (err) {
       console.error("Sign out failed:", err);
       alert("Sign out failed. Check console for details.");
-    } finally {
       setLoadingSignOut(false);
       setConfirmOpen(false);
     }
@@ -192,9 +200,7 @@ export default function AdminHeader() {
             {/* Left: Title */}
             <div className="flex items-center gap-4">
               <h2 className="text-lg font-semibold text-gray-900">Admin Portal</h2>
-              <p className="hidden sm:block text-sm text-gray-500">
-                Manage HOD, Faculty and view analytics
-              </p>
+              <p className="hidden sm:block text-sm text-gray-500">Manage HOD, Faculty and view analytics</p>
             </div>
 
             {/* Right: Profile / actions */}
@@ -202,10 +208,7 @@ export default function AdminHeader() {
               {/* Desktop: show name + role + dropdown */}
               <div className="hidden sm:flex items-center gap-3 text-right">
                 <div>
-                  <div
-                    className="text-sm font-medium text-gray-800 max-w-[220px] truncate"
-                    title={displayName}
-                  >
+                  <div className="text-sm font-medium text-gray-800 max-w-[220px] truncate" title={displayName}>
                     {displayName}
                   </div>
                   <div className="text-xs mt-0.5">
@@ -223,12 +226,7 @@ export default function AdminHeader() {
                     className="flex items-center gap-2 p-1 rounded hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-purple-600"
                   >
                     <Avatar name={displayName} size={40} />
-                    <svg
-                      className="w-4 h-4 text-gray-500"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                      aria-hidden
-                    >
+                    <svg className="w-4 h-4 text-gray-500" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
                       <path
                         fillRule="evenodd"
                         d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 011.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z"
@@ -245,20 +243,38 @@ export default function AdminHeader() {
                     >
                       <div className="py-1">
                         <button
-                          onClick={goProfile}
+                          onClick={() => { setMenuOpen(false); goProfile(); }}
                           ref={firstMenuItemRef as any}
                           role="menuitem"
                           className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 focus:outline-none"
                         >
                           Profile
                         </button>
+
                         <button
-                          onClick={goSettings}
+                          onClick={() => { setMenuOpen(false); goSettings(); }}
                           role="menuitem"
                           className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 focus:outline-none"
                         >
                           Settings
                         </button>
+
+                        <button
+                          onClick={() => { setMenuOpen(false); navigate("/admin/notifications"); }}
+                          role="menuitem"
+                          className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 focus:outline-none"
+                        >
+                          Notifications
+                        </button>
+
+                        <button
+                          onClick={() => { setMenuOpen(false); navigate("/admin/analytics"); }}
+                          role="menuitem"
+                          className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 focus:outline-none"
+                        >
+                          Analytics
+                        </button>
+
                         <button
                           onClick={handleSignOutClick}
                           disabled={loadingSignOut}
@@ -308,6 +324,7 @@ export default function AdminHeader() {
                       >
                         Profile
                       </button>
+
                       <button
                         onClick={() => {
                           setMenuOpen(false);
@@ -316,6 +333,26 @@ export default function AdminHeader() {
                         className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                       >
                         Settings
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setMenuOpen(false);
+                          navigate("/admin/notifications");
+                        }}
+                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      >
+                        Notifications
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setMenuOpen(false);
+                          navigate("/admin/analytics");
+                        }}
+                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      >
+                        Analytics
                       </button>
                     </div>
                   </div>
