@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { Link, useNavigate } from "react-router-dom";
 
+/* Avatar unchanged but slightly cleaned up */
 function Avatar({ name, size = 40 }: { name?: string | null; size?: number }) {
   const initials =
     (name || "")
@@ -30,80 +31,104 @@ function Avatar({ name, size = 40 }: { name?: string | null; size?: number }) {
   );
 }
 
-/** Small confirm modal used for sign out */
-function ConfirmModal({
+/**
+ * Apple-style Sign Out modal (self-contained)
+ * - Frosted backdrop, rounded glass card, pill buttons
+ * - ESC closes, clicking backdrop closes
+ * - Focus is moved to dialog when opened
+ */
+function AppleSignOutModal({
   open,
-  title,
-  description,
-  confirmText = "OK",
-  cancelText = "Cancel",
+  title = "Sign out",
+  description = "Are you sure you want to sign out?",
   loading = false,
   onConfirm,
-  onCancel,
+  onClose,
 }: {
   open: boolean;
-  title: string;
+  title?: string;
   description?: string;
-  confirmText?: string;
-  cancelText?: string;
   loading?: boolean;
   onConfirm: () => void;
-  onCancel: () => void;
+  onClose: () => void;
 }) {
-  const confirmRef = useRef<HTMLButtonElement | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onCancel();
+      if (e.key === "Escape") onClose();
     }
     if (open) {
-      setTimeout(() => confirmRef.current?.focus(), 50);
-      document.addEventListener("keydown", onKey);
+      window.addEventListener("keydown", onKey);
+      // focus the dialog for accessibility
+      setTimeout(() => dialogRef.current?.focus(), 50);
     }
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open, onCancel]);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
 
   if (!open) return null;
 
   return (
-    // backdrop
     <div
-      className="fixed inset-0 z-60 flex items-center justify-center px-4 sm:px-6"
-      aria-modal="true"
+      className="fixed inset-0 z-[120] flex items-center justify-center"
       role="dialog"
-      aria-labelledby="confirm-title"
-      onMouseDown={(e) => {
-        // close on backdrop click (only if clicking the backdrop, not the modal)
-        if (e.target === e.currentTarget) onCancel();
-      }}
+      aria-modal="true"
+      aria-labelledby="apple-signout-title"
+      aria-describedby="apple-signout-desc"
     >
-      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" aria-hidden />
-      <div className="relative z-10 w-full max-w-sm bg-white rounded-lg shadow-xl ring-1 ring-black ring-opacity-5">
-        <div className="p-5">
-          <h3 id="confirm-title" className="text-lg font-medium text-gray-900">
-            {title}
-          </h3>
-          {description && <p className="mt-2 text-sm text-gray-600">{description}</p>}
+      {/* Frosted backdrop */}
+      <div
+        className="absolute inset-0 bg-black/35 backdrop-blur-sm"
+        onClick={onClose}
+        aria-hidden
+      />
 
-          <div className="mt-4 flex justify-end gap-3">
-            <button
-              type="button"
-              onClick={onCancel}
-              className="px-4 py-2 rounded-md border border-gray-200 text-sm bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-purple-300"
-              disabled={loading}
-            >
-              {cancelText}
-            </button>
+      {/* Dialog */}
+      <div
+        ref={dialogRef}
+        tabIndex={-1}
+        className="relative z-20 w-[min(560px,94%)] max-w-lg rounded-2xl bg-white/95 border border-white/60 shadow-2xl p-6 focus:outline-none"
+        style={{
+          boxShadow: "0 12px 30px rgba(20,20,20,0.18)",
+          WebkitBackdropFilter: "blur(6px)",
+          backdropFilter: "blur(6px)",
+        }}
+      >
+        <div className="flex items-start gap-4">
+          <div className="flex-shrink-0 mt-1">
+            <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center border border-gray-200">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <path d="M12 2v4" stroke="#374151" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M6 9l6 6 6-6" stroke="#374151" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+          </div>
 
-            <button
-              ref={confirmRef}
-              type="button"
-              onClick={onConfirm}
-              className="px-4 py-2 rounded-md bg-red-600 text-white text-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-300"
-              disabled={loading}
-            >
-              {loading ? "Signing out..." : confirmText}
-            </button>
+          <div className="min-w-0 flex-1">
+            <h3 id="apple-signout-title" className="text-lg font-medium text-gray-900">
+              {title}
+            </h3>
+            <p id="apple-signout-desc" className="mt-1 text-sm text-gray-600">
+              {description}
+            </p>
+
+            <div className="mt-6 flex items-center justify-end gap-3">
+              <button
+                onClick={onClose}
+                className="inline-flex items-center justify-center px-4 py-2 rounded-full bg-white border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-200"
+                disabled={loading}
+              >
+                Cancel
+              </button>
+
+              <button
+                onClick={() => onConfirm()}
+                className="inline-flex items-center justify-center px-4 py-2 rounded-full bg-red-50 border border-red-200 text-sm font-medium text-red-600 hover:bg-red-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-red-200 transition-colors"
+                disabled={loading}
+              >
+                {loading ? "Signing out..." : "Sign out"}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -178,7 +203,7 @@ export default function AdminHeader() {
   }
 
   function handleSignOutClick() {
-    // open custom modal instead of native confirm
+    // open Apple-style modal
     setConfirmOpen(true);
   }
 
@@ -243,7 +268,10 @@ export default function AdminHeader() {
                     >
                       <div className="py-1">
                         <button
-                          onClick={() => { setMenuOpen(false); goProfile(); }}
+                          onClick={() => {
+                            setMenuOpen(false);
+                            goProfile();
+                          }}
                           ref={firstMenuItemRef as any}
                           role="menuitem"
                           className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 focus:outline-none"
@@ -252,7 +280,10 @@ export default function AdminHeader() {
                         </button>
 
                         <button
-                          onClick={() => { setMenuOpen(false); goSettings(); }}
+                          onClick={() => {
+                            setMenuOpen(false);
+                            goSettings();
+                          }}
                           role="menuitem"
                           className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 focus:outline-none"
                         >
@@ -260,7 +291,10 @@ export default function AdminHeader() {
                         </button>
 
                         <button
-                          onClick={() => { setMenuOpen(false); navigate("/admin/notifications"); }}
+                          onClick={() => {
+                            setMenuOpen(false);
+                            navigate("/admin/notifications");
+                          }}
                           role="menuitem"
                           className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 focus:outline-none"
                         >
@@ -268,7 +302,10 @@ export default function AdminHeader() {
                         </button>
 
                         <button
-                          onClick={() => { setMenuOpen(false); navigate("/admin/analytics"); }}
+                          onClick={() => {
+                            setMenuOpen(false);
+                            navigate("/admin/analytics");
+                          }}
                           role="menuitem"
                           className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 focus:outline-none"
                         >
@@ -363,16 +400,14 @@ export default function AdminHeader() {
         </div>
       </header>
 
-      {/* Confirm modal */}
-      <ConfirmModal
+      {/* Apple-style sign out modal */}
+      <AppleSignOutModal
         open={confirmOpen}
+        loading={loadingSignOut}
         title="Sign out"
         description="Are you sure you want to sign out?"
-        confirmText="Sign out"
-        cancelText="Cancel"
-        loading={loadingSignOut}
         onConfirm={doSignOut}
-        onCancel={() => setConfirmOpen(false)}
+        onClose={() => setConfirmOpen(false)}
       />
     </>
   );

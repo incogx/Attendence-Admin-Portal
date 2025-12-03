@@ -1,187 +1,153 @@
 // src/components/admin/AdminSidebar.tsx
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
-import { BarChart3, Users, Settings, Bell, Shield, Plus } from "lucide-react";
+import {
+  BarChart3,
+  Users,
+  Settings,
+  Bell,
+  Shield,
+  Plus,
+  Menu,
+  X
+} from "lucide-react";
 
-export default function AdminSidebar() {
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [usersOpen, setUsersOpen] = useState(false);
-  const location = useLocation();
+type NavItemProps = {
+  to: string;
+  label: string;
+  end?: boolean;
+  icon?: React.ReactNode;
+  onClick?: () => void;
+};
 
-  // Determine if we're in any /admin/users* route — used to highlight parent compactly
-  const usersActive = location.pathname.startsWith("/admin/users") || location.pathname === "/admin/users";
-
-  // auto open users submenu when on users routes
-  useEffect(() => {
-    if (usersActive) setUsersOpen(true);
-  }, [usersActive]);
-
-  const linkBaseClasses =
-    "block px-4 py-3 rounded-md mb-1 text-sm transition-colors duration-150";
-  const activeClasses = "bg-purple-600 text-white";
-  const inactiveClasses = "text-gray-700 hover:bg-gray-100";
-
-  const navItem = (to: string, label: string, end = false, extra?: React.ReactNode) => (
+function NavItem({ to, label, end = false, icon, onClick }: NavItemProps) {
+  return (
     <NavLink
       to={to}
       end={end}
+      onClick={onClick}
       className={({ isActive }) =>
-        `${linkBaseClasses} ${isActive ? activeClasses : inactiveClasses}`
+        [
+          "flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition",
+          "focus:outline-none focus:ring-2 focus:ring-purple-300",
+          isActive ? "bg-purple-600 text-white" : "text-gray-700 hover:bg-gray-50"
+        ].join(" ")
       }
-      onClick={() => setMobileOpen(false)} // close mobile menu on click
     >
-      <div className="flex items-center justify-between">
-        <div className="truncate">{label}</div>
-        {extra}
-      </div>
+      <span className="w-5 h-5 flex-shrink-0">{icon}</span>
+      <span className="truncate">{label}</span>
     </NavLink>
   );
+}
+
+export default function AdminSidebar() {
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const location = useLocation();
+
+  const closeMobile = () => setMobileOpen(false);
 
   return (
     <>
-      {/* Mobile top bar */}
+      {/* Mobile Header */}
       <div className="md:hidden flex items-center justify-between p-3 border-b bg-white">
-        <div className="text-lg font-bold text-purple-700">EduAdmin</div>
+        <div className="flex items-center gap-2">
+          <img
+            src="/sathyabama-logo.png"
+            alt="Sathyabama Logo"
+            className="w-8 h-8 object-contain"
+          />
+          <span className="font-semibold text-purple-700">Sathyabama</span>
+        </div>
+
         <button
-          aria-label="Toggle menu"
+          aria-label={mobileOpen ? "Close menu" : "Open menu"}
           onClick={() => setMobileOpen((v) => !v)}
-          className="px-3 py-2 rounded-md bg-white border"
+          className="inline-flex items-center justify-center p-2 rounded-md border bg-white shadow-sm hover:bg-gray-50"
         >
-          {mobileOpen ? "Close" : "Menu"}
+          {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </button>
       </div>
 
       {/* Sidebar */}
       <aside
-        className={`bg-white border-r w-64 md:static fixed inset-y-0 left-0 z-30 transform md:translate-x-0 transition-transform duration-200
-          ${mobileOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0`}
+        className={[
+          "bg-white border-r w-72 md:static fixed inset-y-0 left-0 z-40 transform transition-transform duration-200",
+          mobileOpen ? "translate-x-0" : "-translate-x-full",
+          "md:translate-x-0 md:shadow-none shadow-lg"
+        ].join(" ")}
       >
         <div className="p-6 h-full flex flex-col">
-          <div className="hidden md:block text-xl font-bold text-purple-700 mb-4">
-            EduAdmin
+          
+          {/* SATHYABAMA BRANDING */}
+          <div className="hidden md:flex items-center gap-3 mb-6">
+            <img
+              src="/sathyabama-logo.png"
+              alt="Sathyabama Logo"
+              className="w-12 h-12 object-contain"
+            />
+            <div className="leading-tight">
+              <h1 className="text-lg font-bold text-purple-700">SATHYABAMA</h1>
+              <p className="text-xs text-gray-500">Institute of Science & Technology</p>
+            </div>
           </div>
 
+          {/* Navigation */}
           <nav className="flex-1">
-            <div className="mb-2">
-              {/* Dashboard: use relative/root path */}
-              {navItem("/admin", "Dashboard", true)}
+            <div className="mb-4">
+              <NavItem
+                to="/admin"
+                label="Dashboard"
+                end
+                icon={<BarChart3 className="w-5 h-5" />}
+                onClick={closeMobile}
+              />
             </div>
 
-            {/* Users parent row: single compact control that shows submenu */}
-            <div
-              className={`flex items-center justify-between px-2 py-1 mb-1 rounded-md ${
-                usersActive ? "bg-purple-50" : ""
-              }`}
-            >
-              <button
-                onClick={() => setUsersOpen((v) => !v)}
-                className={`text-left w-full ${usersActive ? "text-purple-700" : "text-gray-700"} px-4 py-3 rounded-md`}
-                aria-expanded={usersOpen}
-                aria-controls="users-submenu"
+            {/* USERS */}
+            <div className="mb-4">
+              <NavLink
+                to="/admin/users"
+                onClick={closeMobile}
+                className={({ isActive }) =>
+                  [
+                    "flex items-center justify-between px-4 py-3 rounded-lg mb-3 transition",
+                    "focus:outline-none focus:ring-2 focus:ring-purple-300",
+                    isActive ? "bg-purple-600 text-white" : "text-gray-700 hover:bg-gray-50"
+                  ].join(" ")
+                }
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Users className={usersActive ? "w-4 h-4 text-purple-600" : "w-4 h-4 text-gray-400"} />
-                    <span className="text-sm font-medium">Users</span>
-                  </div>
-                  <span className="text-xs opacity-75">{usersActive ? "(open)" : ""}</span>
+                <div className="flex items-center gap-3">
+                  <Users
+                    className={`w-5 h-5 ${
+                      location.pathname.startsWith("/admin/users")
+                        ? "text-white"
+                        : "text-gray-600"
+                    }`}
+                  />
+                  <span className="font-medium">Users</span>
                 </div>
-              </button>
+
+                <NavLink
+                  to="/admin/users/add"
+                  onClick={closeMobile}
+                  className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-white border text-purple-600 hover:bg-purple-50 text-sm"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span className="hidden md:inline">Add</span>
+                </NavLink>
+              </NavLink>
             </div>
 
-            {/* Submenu — render in smaller indent. Only shown when usersOpen true */}
-            {usersOpen && (
-              <div id="users-submenu" className="pl-6 mb-4">
-                {navItem("/admin/users", "Manage Users")}
-                <NavLink
-                  to={"/admin/users/add?role=HOD"}
-                  className={({ isActive }) =>
-                    `${linkBaseClasses} ${isActive ? activeClasses : inactiveClasses}`
-                  }
-                  onClick={() => setMobileOpen(false)}
-                >
-                  Add HOD
-                </NavLink>
-                <NavLink
-                  to={"/admin/users/add?role=FACULTY"}
-                  className={({ isActive }) =>
-                    `${linkBaseClasses} ${isActive ? activeClasses : inactiveClasses}`
-                  }
-                  onClick={() => setMobileOpen(false)}
-                >
-                  Add Faculty
-                </NavLink>
-                <NavLink
-                  to={"/admin/users/add"}
-                  className={({ isActive }) =>
-                    `${linkBaseClasses} ${isActive ? activeClasses : inactiveClasses}`
-                  }
-                  onClick={() => setMobileOpen(false)}
-                >
-                  Add User
-                </NavLink>
-              </div>
-            )}
-
-            {/* OTHER sections: analytics, notifications, moderation, settings */}
-            <div className="mb-2">
-              <NavLink
-                to="/admin/analytics"
-                className={({ isActive }) =>
-                  `${linkBaseClasses} ${isActive ? activeClasses : inactiveClasses} flex items-center justify-between`
-                }
-                onClick={() => setMobileOpen(false)}
-              >
-                <div className="flex items-center gap-3">
-                  <BarChart3 className="w-4 h-4" />
-                  <span className="truncate">Analytics</span>
-                </div>
-              </NavLink>
-
-              <NavLink
-                to="/admin/notifications"
-                className={({ isActive }) =>
-                  `${linkBaseClasses} ${isActive ? activeClasses : inactiveClasses} flex items-center justify-between`
-                }
-                onClick={() => setMobileOpen(false)}
-              >
-                <div className="flex items-center gap-3">
-                  <Bell className="w-4 h-4" />
-                  <span className="truncate">Notifications</span>
-                </div>
-              </NavLink>
-
-              <NavLink
-                to="/admin/moderation"
-                className={({ isActive }) =>
-                  `${linkBaseClasses} ${isActive ? activeClasses : inactiveClasses} flex items-center justify-between`
-                }
-                onClick={() => setMobileOpen(false)}
-              >
-                <div className="flex items-center gap-3">
-                  <Shield className="w-4 h-4" />
-                  <span className="truncate">Moderation</span>
-                </div>
-              </NavLink>
-
-              <NavLink
-                to="/admin/settings"
-                className={({ isActive }) =>
-                  `${linkBaseClasses} ${isActive ? activeClasses : inactiveClasses} flex items-center justify-between`
-                }
-                onClick={() => setMobileOpen(false)}
-              >
-                <div className="flex items-center gap-3">
-                  <Settings className="w-4 h-4" />
-                  <span className="truncate">Settings</span>
-                </div>
-              </NavLink>
+            {/* Other Sections */}
+            <div className="space-y-2">
+              <NavItem to="/admin/analytics" label="Analytics" icon={<BarChart3 className="w-4 h-4" />} onClick={closeMobile} />
+              <NavItem to="/admin/notifications" label="Notifications" icon={<Bell className="w-4 h-4" />} onClick={closeMobile} />
+              <NavItem to="/admin/moderation" label="Moderation" icon={<Shield className="w-4 h-4" />} onClick={closeMobile} />
+              <NavItem to="/admin/settings" label="Settings" icon={<Settings className="w-4 h-4" />} onClick={closeMobile} />
             </div>
           </nav>
 
-          <div className="mt-auto text-xs text-gray-500">
-            Manage HOD, Faculty and view analytics
-          </div>
+        
         </div>
       </aside>
     </>

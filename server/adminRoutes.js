@@ -41,7 +41,7 @@ router.get("/admin/list-users", async (req, res) => {
   try {
     const { data, error } = await supabaseAdmin
       .from("profiles")
-      .select("id, full_name, email, role, created_at")
+      .select("id, full_name, email, role, department, phone, created_at")
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -57,13 +57,16 @@ router.get("/admin/list-users", async (req, res) => {
 
 // CREATE USER (idempotent and defensive)
 // POST /api/admin/create-user
-// body: { email, full_name, role }
+// body: { email, full_name, role, department?, phone?, password? }
 router.post("/admin/create-user", async (req, res) => {
   try {
     const body = req.body || {};
     const email = body.email;
     const full_name = body.full_name;
     const role = body.role ? String(body.role).toUpperCase() : "";
+    const department = body.department || null;
+    const phone = body.phone || null;
+    const providedPassword = body.password;
 
     if (!isEmail(email) || !isNonEmptyString(full_name) || !isNonEmptyString(role)) {
       return sendJson(res, 400, { error: "email, full_name and role (HOD or FACULTY) are required" });
@@ -76,7 +79,7 @@ router.post("/admin/create-user", async (req, res) => {
     try {
       const { data: existingProfile, error: findErr } = await supabaseAdmin
         .from("profiles")
-        .select("id, full_name, email, role, created_at")
+        .select("id, full_name, email, role, department, phone, created_at")
         .eq("email", email)
         .maybeSingle();
 
@@ -90,8 +93,8 @@ router.post("/admin/create-user", async (req, res) => {
       console.warn("profiles lookup exception (continuing):", lookupErr?.message || lookupErr);
     }
 
-    // 2) generate temp password (not returned)
-    const tempPassword = Math.random().toString(36).slice(-10) + "Aa1!";
+    // 2) use provided password or generate temp password
+    const tempPassword = providedPassword || (Math.random().toString(36).slice(-10) + "Aa1!");
 
     // 3) create auth user (try v2 admin API, fallback)
     let createdUser = null;
@@ -153,7 +156,7 @@ router.post("/admin/create-user", async (req, res) => {
     // 4) insert profile row
     const { data: profileData, error: profileErr } = await supabaseAdmin
       .from("profiles")
-      .insert([{ id: userId, email: email, full_name: full_name, role: role }])
+      .insert([{ id: userId, email: email, full_name: full_name, role: role, department: department, phone: phone }])
       .select()
       .single();
 

@@ -4,12 +4,15 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import dayjs from "dayjs";
+import AddUserModal from "./AddUserModal";
 
 type ProfileRow = {
   id: string;
   email: string;
   full_name?: string | null;
   role?: string | null;
+  department?: string | null;
+  phone?: string | null;
   created_at?: string | null;
 };
 
@@ -19,14 +22,8 @@ export default function UserManagement() {
   const [searchTerm, setSearchTerm] = useState("");
   const [profiles, setProfiles] = useState<ProfileRow[]>([]);
   const [loadingProfiles, setLoadingProfiles] = useState(false);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [addLoading, setAddLoading] = useState(false);
+  const [showAddModal, setShowAddModal] = useState<"HOD" | "FACULTY" | null>(null);
   const [deleteLoadingId, setDeleteLoadingId] = useState<string | null>(null);
-
-  // add form state
-  const [newEmail, setNewEmail] = useState("");
-  const [newFullName, setNewFullName] = useState("");
-  const [newRole, setNewRole] = useState<"HOD" | "FACULTY" | "ADMIN">("FACULTY");
 
   // basic client-side toast messages
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
@@ -36,23 +33,54 @@ export default function UserManagement() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading]);
 
+  // ---------- REPLACED fetchProfiles: robust debug-friendly version ----------
   async function fetchProfiles() {
     setLoadingProfiles(true);
-    try {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id, email, full_name, role, created_at")
-        .order("created_at", { ascending: false });
+    setToast(null);
 
-      if (error) throw error;
-      setProfiles((data ?? []) as ProfileRow[]);
-    } catch (err) {
+    try {
+      // Use Vite env or fallback to localhost:4001 (make sure .env has VITE_API_BASE)
+      const API_BASE = (import.meta.env.VITE_API_BASE as string) || "http://localhost:4001/api";
+      const ADMIN_SECRET = (import.meta.env.VITE_ADMIN_SECRET as string) || "";
+
+      const res = await fetch(`${API_BASE}/admin/list-users`, {
+        method: "GET",
+        headers: {
+          "Accept": "application/json",
+          ...(ADMIN_SECRET ? { "x-admin-secret": ADMIN_SECRET } : {}),
+        },
+      });
+
+      // read text first to show helpful debug if server returned HTML
+      const text = await res.text();
+
+      try {
+        const data = JSON.parse(text);
+        if (!res.ok) {
+          const msg = data?.error || data?.message || `Server returned ${res.status}`;
+          throw new Error(msg);
+        }
+        setProfiles((data.users ?? []) as ProfileRow[]);
+      } catch (parseErr) {
+        console.error(
+          "Failed to parse JSON from /admin/list-users. status:",
+          res.status,
+          "responseText (first 1000 chars):",
+          text.slice(0, 1000)
+        );
+        setToast({
+          type: "error",
+          message: "Failed to load users (server returned non-JSON). Check server logs or API_BASE.",
+        });
+      }
+    } catch (err: any) {
       console.error("Failed to fetch profiles:", err);
       setToast({ type: "error", message: "Failed to load users." });
     } finally {
       setLoadingProfiles(false);
     }
   }
+  // -------------------------------------------------------------------------
 
   const filtered = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
@@ -65,81 +93,21 @@ export default function UserManagement() {
     );
   }, [profiles, searchTerm]);
 
-  async function handleCreateUser(e?: React.FormEvent) {
-    e?.preventDefault();
-    if (!newEmail) {
-      setToast({ type: "error", message: "Email is required" });
-      return;
-    }
-    setAddLoading(true);
-
-    // Try server-side admin endpoint first (safer to create auth+profile)
-    try {
-      const res = await fetch("/api/admin/create-user", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: newEmail,
-          full_name: newFullName,
-          role: newRole,
-          // you can send a temporary password or let server generate & email
-        }),
-      });
-
-      if (res.ok) {
-        setToast({ type: "success", message: "User created (server)." });
-        setShowAddModal(false);
-        setNewEmail("");
-        setNewFullName("");
-        setNewRole("FACULTY");
-        await fetchProfiles();
-        setAddLoading(false);
-        return;
-      }
-
-      // If endpoint not found or returns error, fall back to client-side insert (dev only)
-      const text = await res.text();
-      console.warn("Server create-user failed:", res.status, text);
-    } catch (err) {
-      // network or 404 — fallback
-      console.info("Create-user server endpoint not available, falling back to profiles insert.");
-    }
-
-    try {
-      // NOTE: This will not create an auth account in Supabase auth; it's only profiles table.
-      // Prefer server endpoint that creates both auth user and profile.
-      const { error } = await supabase.from("profiles").insert([
-        {
-          email: newEmail,
-          full_name: newFullName,
-          role: newRole,
-        },
-      ]);
-      if (error) throw error;
-
-      setToast({ type: "success", message: "Profile created. (Add auth user server-side.)" });
-      setShowAddModal(false);
-      setNewEmail("");
-      setNewFullName("");
-      setNewRole("FACULTY");
-      await fetchProfiles();
-    } catch (err) {
-      console.error("Failed to create profile:", err);
-      setToast({ type: "error", message: "Failed to create user." });
-    } finally {
-      setAddLoading(false);
-    }
-  }
-
   async function handleDelete(id: string) {
     if (!confirm("Delete this user profile? This cannot be undone from client.")) return;
     setDeleteLoadingId(id);
 
     // Try server-side delete endpoint first (recommended)
     try {
-      const res = await fetch("/api/admin/delete-user", {
+      const API_BASE = (import.meta.env.VITE_API_BASE as string) || "http://localhost:4001/api";
+      const ADMIN_SECRET = (import.meta.env.VITE_ADMIN_SECRET as string) || "";
+
+      const res = await fetch(`${API_BASE}/admin/delete-user`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(ADMIN_SECRET ? { "x-admin-secret": ADMIN_SECRET } : {}),
+        },
         body: JSON.stringify({ id }),
       });
 
@@ -153,7 +121,7 @@ export default function UserManagement() {
       console.info("Server delete endpoint not available, falling back to client profiles delete.");
     }
 
-    // Fallback: remove profile row only
+    // Fallback: remove profile row only via Supabase client
     try {
       const { error } = await supabase.from("profiles").delete().eq("id", id);
       if (error) throw error;
@@ -189,12 +157,20 @@ export default function UserManagement() {
 
         <div className="flex items-center gap-3">
           <button
-            onClick={() => setShowAddModal(true)}
-            className="flex items-center space-x-2 bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition-colors shadow-sm"
-            aria-label="Add user"
+            onClick={() => setShowAddModal("HOD")}
+            className="flex items-center space-x-2 bg-purple-600 text-white px-4 py-3 rounded-lg hover:bg-purple-700 transition-colors shadow-sm"
+            aria-label="Add HOD"
           >
             <Plus className="w-5 h-5" />
-            <span className="font-medium">Add User</span>
+            <span className="font-medium">Add HOD</span>
+          </button>
+          <button
+            onClick={() => setShowAddModal("FACULTY")}
+            className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-3 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+            aria-label="Add Faculty"
+          >
+            <Plus className="w-5 h-5" />
+            <span className="font-medium">Add Faculty</span>
           </button>
           <button
             onClick={() => fetchProfiles()}
@@ -225,6 +201,8 @@ export default function UserManagement() {
                 <th className="py-3 px-4">Name</th>
                 <th className="py-3 px-4">Email</th>
                 <th className="py-3 px-4">Role</th>
+                <th className="py-3 px-4">Department</th>
+                <th className="py-3 px-4">Phone</th>
                 <th className="py-3 px-4">Created</th>
                 <th className="py-3 px-4">Actions</th>
               </tr>
@@ -232,13 +210,13 @@ export default function UserManagement() {
             <tbody>
               {loadingProfiles ? (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-gray-500">
+                  <td colSpan={7} className="py-8 text-center text-gray-500">
                     Loading users...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-gray-500">
+                  <td colSpan={7} className="py-8 text-center text-gray-500">
                     No users found.
                   </td>
                 </tr>
@@ -250,14 +228,13 @@ export default function UserManagement() {
                     </td>
                     <td className="py-4 px-4 text-gray-600">{p.email}</td>
                     <td className="py-4 px-4 text-sm text-gray-700">{p.role ?? "—"}</td>
+                    <td className="py-4 px-4 text-sm text-gray-700">{p.department ?? "—"}</td>
+                    <td className="py-4 px-4 text-sm text-gray-700">{p.phone ?? "—"}</td>
                     <td className="py-4 px-4 text-sm text-gray-500">
                       {p.created_at ? dayjs(p.created_at).format("M/D/YYYY, h:mm:ss A") : "—"}
                     </td>
                     <td className="py-4 px-4 text-sm">
-                      <button
-                        onClick={() => copyId(p.id)}
-                        className="mr-4 text-indigo-600 hover:underline"
-                      >
+                      <button onClick={() => copyId(p.id)} className="mr-4 text-indigo-600 hover:underline">
                         CopyID
                       </button>
                       <button
@@ -277,93 +254,7 @@ export default function UserManagement() {
       </div>
 
       {/* Add User Modal */}
-      {showAddModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center px-4 sm:px-6"
-          role="dialog"
-          aria-modal="true"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) setShowAddModal(false);
-          }}
-        >
-          <div className="fixed inset-0 bg-black/40" aria-hidden />
-          <div className="relative z-10 w-full max-w-xl bg-white rounded-lg shadow-xl ring-1 ring-black ring-opacity-5">
-            <form
-              onSubmit={handleCreateUser}
-              className="p-6"
-              onMouseDown={(e) => e.stopPropagation()}
-            >
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Create User</h3>
-              <p className="text-sm text-gray-500 mb-4">
-                Create an account for HOD, Faculty, or Admin. For production, use server-side user
-                creation to also provision Auth accounts.
-              </p>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm text-gray-700 mb-1">Full name</label>
-                  <input
-                    value={newFullName}
-                    onChange={(e) => setNewFullName(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded"
-                    placeholder="Full name"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm text-gray-700 mb-1">Email</label>
-                  <input
-                    value={newEmail}
-                    onChange={(e) => setNewEmail(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded"
-                    placeholder="email@example.com"
-                    type="email"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm text-gray-700 mb-1">Role</label>
-                  <select
-                    value={newRole}
-                    onChange={(e) => setNewRole(e.target.value as any)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded"
-                  >
-                    <option value="FACULTY">Faculty</option>
-                    <option value="HOD">HOD</option>
-                    <option value="ADMIN">Admin</option>
-                  </select>
-                </div>
-
-                <div className="flex items-end justify-end">
-                  <div className="text-right text-sm text-gray-500">
-                    <div className="mb-2"> </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-6 flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 rounded border border-gray-200 bg-white hover:bg-gray-50"
-                  disabled={addLoading}
-                >
-                  Cancel
-                </button>
-
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded bg-purple-600 text-white hover:bg-purple-700"
-                  disabled={addLoading}
-                >
-                  {addLoading ? "Creating..." : "Create user"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <AddUserModal role={showAddModal as "HOD" | "FACULTY"} open={!!showAddModal} onClose={() => setShowAddModal(null)} onCreated={() => fetchProfiles()} />
 
       {/* Toast */}
       {toast && (
@@ -373,11 +264,7 @@ export default function UserManagement() {
           }`}
         >
           {toast.message}
-          <button
-            onClick={() => setToast(null)}
-            className="ml-3 underline text-xs opacity-90"
-            aria-label="dismiss"
-          >
+          <button onClick={() => setToast(null)} className="ml-3 underline text-xs opacity-90" aria-label="dismiss">
             Dismiss
           </button>
         </div>

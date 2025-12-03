@@ -1,101 +1,132 @@
-import { useState } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
-import { LogIn } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useState } from "react";
+import { useAuth } from "../../contexts/AuthContext";
+import { LogIn } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 export default function LoginForm() {
   const navigate = useNavigate();
   const { signIn } = useAuth();
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
+  const submit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    setError("");
     setLoading(true);
 
     try {
       await signIn(email, password);
-
-      // 🚀 IMPORTANT: Navigate to root so RedirectToRole decides where to go
-      navigate('/', { replace: true });
-
+      navigate("/", { replace: true });
     } catch (err: any) {
-      setError(err?.message ?? 'Login failed');
-    } finally {
+      setError(err?.message ?? "Sign in failed");
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-purple-100 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-8">
-        <div className="flex items-center justify-center mb-8">
-          <div className="bg-purple-600 p-3 rounded-xl">
-            <LogIn className="w-8 h-8 text-white" />
-          </div>
+    <div className="relative min-h-screen w-full flex items-center justify-center bg-[#f7f7f7] overflow-hidden">
+
+      {/* RIGHT SIDE IMAGE WITH FADE */}
+      <div
+        className="absolute inset-y-0 right-0 w-[55%] hidden md:block"
+        style={{
+          backgroundImage: "url('/sathyabama-bg.jpg')",
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          maskImage: "linear-gradient(to left, black 60%, transparent 100%)",
+          WebkitMaskImage: "linear-gradient(to left, black 60%, transparent 100%)",
+        }}
+      />
+
+      {/* CENTERED LOGIN CARD */}
+      <div className="relative z-10 w-full max-w-md bg-white rounded-2xl p-10 shadow-2xl border border-gray-100">
+
+        {/* Logo & Title */}
+        <div className="flex flex-col items-center mb-6">
+          <img
+            src="/sathyabama-logo.png"
+            alt="Sathyabama Logo"
+            className="w-32 md:w-40 mb-3"
+          />
+
+          <p className="text-[13px] md:text-sm font-semibold text-gray-600 -mt-1 tracking-wide">
+            INSTITUTE OF SCIENCE & TECHNOLOGY
+          </p>
         </div>
 
-        <h1 className="text-3xl font-bold text-gray-900 text-center mb-2">
-          Admin Portal
+        <h1 className="text-xl font-semibold text-gray-900 text-center">
+          Sathyabama Portal Login
         </h1>
-        <p className="text-gray-600 text-center mb-8">
-          Sign in to manage your educational platform
+
+        <p className="text-sm text-gray-500 text-center mb-6">
+          For Administrators, HODs & Faculty Members
         </p>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Form */}
+        <form onSubmit={submit} className="space-y-4">
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+            <div className="rounded-md bg-red-50 border border-red-100 px-4 py-2 text-sm text-red-700">
               {error}
             </div>
           )}
 
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-              Email Address
-            </label>
+            <label className="block text-sm text-gray-700 font-medium">Email</label>
             <input
-              id="email"
               type="email"
-              autoComplete="email"
+              required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              required
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 focus:border-transparent outline-none transition-all"
-              placeholder="admin@example.com"
+              placeholder="Enter your Sathyabama email"
+              className="mt-1 w-full px-4 py-3 rounded-lg border border-gray-300 bg-gray-50 focus:outline-none 
+                        focus:ring-2 focus:ring-[#7A0D15]/20 text-gray-800 placeholder-gray-400"
+              autoComplete="email"
             />
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-              Password
-            </label>
+            <label className="block text-sm text-gray-700 font-medium">Password</label>
             <input
-              id="password"
               type="password"
-              autoComplete="current-password"
+              required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              required
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 focus:border-transparent outline-none transition-all"
-              placeholder="••••••••"
+              placeholder="Enter your password"
+              className="mt-1 w-full px-4 py-3 rounded-lg border border-gray-300 bg-gray-50 focus:outline-none 
+                        focus:ring-2 focus:ring-[#7A0D15]/20 text-gray-800 placeholder-gray-400"
+              autoComplete="current-password"
             />
           </div>
 
+          <div className="flex items-center justify-between text-sm text-gray-500">
+            <label className="flex items-center gap-2">
+              <input type="checkbox" className="h-4 w-4" />
+              Remember me
+            </label>
+
+            <a href="/forgot-password" className="text-[#7A0D15] hover:underline">
+              Forgot password?
+            </a>
+          </div>
+
+          {/* Button */}
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-purple-600 text-white py-3 rounded-lg font-semibold hover:bg-purple-700 focus:ring-4 focus:ring-purple-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full flex items-center justify-center gap-2 rounded-lg py-3 bg-[#7A0D15] hover:bg-[#600c10] 
+                      text-white font-medium transition disabled:opacity-60"
           >
-            {loading ? 'Signing in...' : 'Sign In'}
+            <LogIn className="w-5 h-5" />
+            {loading ? "Signing in…" : "Sign In"}
           </button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-gray-600">
-          Demo credentials: Use your admin account
+        {/* Footer */}
+        <p className="mt-6 text-center text-xs text-gray-400">
+          © {new Date().getFullYear()} Sathyabama Institute of Science & Technology
         </p>
       </div>
     </div>
