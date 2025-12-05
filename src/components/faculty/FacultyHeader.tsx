@@ -31,7 +31,7 @@ function Avatar({ name, size = 40 }: { name?: string | null; size?: number }) {
   );
 }
 
-/* Reusable Apple-style sign-out modal (keeps parity with admin modal) */
+/* Reusable Apple-style sign-out modal */
 function AppleSignOutModal({
   open,
   title = "Sign out",
@@ -71,11 +71,7 @@ function AppleSignOutModal({
       aria-labelledby="faculty-signout-title"
       aria-describedby="faculty-signout-desc"
     >
-      <div
-        className="absolute inset-0 bg-black/35 backdrop-blur-sm"
-        onClick={onClose}
-        aria-hidden
-      />
+      <div className="absolute inset-0 bg-black/35 backdrop-blur-sm" onClick={onClose} aria-hidden />
       <div
         ref={dialogRef}
         tabIndex={-1}
@@ -135,19 +131,16 @@ export default function FacultyHeader({
   title?: string;
   subtitle?: string;
 }) {
-  // use your auth context — signOut should be provided there (similar to admin)
   const { user, profile, signOut } = useAuth() as any;
   const navigate = useNavigate();
 
   const [menuOpen, setMenuOpen] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [loadingSignOut, setLoadingSignOut] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const mobileMenuRef = useRef<HTMLDivElement | null>(null);
   const firstMenuItemRef = useRef<HTMLButtonElement | null>(null);
 
-  // display name and role
   const displayName = profile?.full_name ?? user?.user_metadata?.full_name ?? user?.email ?? "Faculty";
   const role = "FACULTY";
 
@@ -169,7 +162,6 @@ export default function FacultyHeader({
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
         setMenuOpen(false);
-        setMobileOpen(false);
       }
     }
     document.addEventListener("mousedown", onDocClick);
@@ -196,8 +188,8 @@ export default function FacultyHeader({
         console.warn("storage clear failed", err);
       }
 
-      // replace to login so Back can't return to protected pages
-      window.location.replace("/login");
+      // use router replace so user cannot go back to protected pages
+      navigate("/login", { replace: true });
     } catch (err) {
       console.error("Sign out failed:", err);
       alert("Sign out failed. Check console for details.");
@@ -275,7 +267,7 @@ export default function FacultyHeader({
                             setMenuOpen(false);
                             goProfile();
                           }}
-                          ref={firstMenuItemRef as any}
+                          ref={firstMenuItemRef}
                           role="menuitem"
                           className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 focus:outline-none"
                         >
@@ -315,6 +307,7 @@ export default function FacultyHeader({
                   onClick={() => setMenuOpen((v) => !v)}
                   className="p-1 rounded hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-purple-600"
                   aria-label="Open user menu"
+                  aria-expanded={menuOpen}
                 >
                   <Avatar name={displayName} size={36} />
                 </button>

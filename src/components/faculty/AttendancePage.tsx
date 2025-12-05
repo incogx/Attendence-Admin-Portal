@@ -1,530 +1,353 @@
-// src/pages/faculty/AttendancePage.tsx
+// src/components/faculty/AttendancePage.tsx
 import React, { useEffect, useMemo, useState } from "react";
-import { Download } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import {
+  Edit,
+  Send,
+  Eye,
+  Clock,
+  CheckCircle,
+  XCircle,
+  AlertTriangle,
+  ClipboardList, // New icon for the main title
+} from "lucide-react";
+
+import { AttendanceReport, AttendanceStatus } from "../../types/attendance";
+import { useAuth } from "../../contexts/AuthContext";
+
+// Reuse your components (they exist in faculty folder)
+import StudentsGrid from "./AttendanceReports"; // Assuming this is actually StudentsGrid as the panel below suggests
+import GenerateQRPanel from "./GenerateQRPanel";
 
 /**
- * Faculty Attendance Page (patched)
+ * AttendancePage
+ * - Lists the most recent attendance reports for the faculty's classes
+ * - Lets the faculty create a new attendance record (quick flow)
+ * - Shows a right-side panel with QR generator or details (using your GenerateQRPanel)
  *
- * - Local-date-safe formatDate (avoids UTC off-by-one)
- * - Apply button disabled while loading + shows busy state
- * - Export buttons disabled when no data
- * - Table headers include scope="col" for accessibility
- * - Small helpful comments showing where to replace mocks with Supabase
+ * Assumptions:
+ * - API endpoints:
+ * GET  /api/attendance?facultyId=...
+ * POST /api/attendance   { facultyId, classId, date, students: [{id, status}] }
+ * Adjust paths to match your server.
  *
- * Replace mock* functions with real backend calls (Supabase / REST).
+ * - useAuth() returns: { user, profile, loading }
  */
 
-/* ------------------------- Types ------------------------- */
-type ClassItem = {
-  id: string;
-  courseCode: string;
-  courseTitle: string;
-  room?: string;
-};
+const API_LIST = "/api/attendance";
+const API_CREATE = "/api/attendance";
 
-type StudentAttendance = {
-  studentId: string;
-  name: string;
-  roll: string;
-  status: "present" | "absent" | "leave" | "unknown";
-  markedAt?: string;
-};
+// Define a professional primary color for the system, e.g., a deep indigo or university maroon
+const PRIMARY_COLOR = "[#7A0D15]"; // Your existing deep maroon color
 
-type AttendanceRecord = {
-  classId: string;
-  date: string; // YYYY-MM-DD
-  students: StudentAttendance[];
-};
+export default function AttendancePage() {
+  const navigate = useNavigate();
+  const { user, profile, loading: authLoading } = useAuth() as any;
 
-/* ------------------------ MOCKED BACKEND ------------------------ */
-/**
- * NOTE: Replace mocks with real API calls.
- *
- * Example Supabase sketch for exact date:
- * const { data, error } = await supabase
- *   .from('attendance')
- *   .select('class_id, date, students:students(id, name, roll), status, marked_at')
- *   .eq('date', date);
- *
- * Then transform rows into AttendanceRecord[] grouped by class_id.
- */
+  const [reports, setReports] = useState<AttendanceReport[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
-/* Mock classes available to faculty */
-const MOCK_CLASSES: ClassItem[] = [
-  { id: "c1", courseCode: "CS201", courseTitle: "Data Structures", room: "Lab 3" },
-  { id: "c2", courseCode: "CS301", courseTitle: "Operating Systems", room: "Room 102" },
-  { id: "c3", courseCode: "CS401", courseTitle: "AI & Robotics", room: "Room 204" },
-];
-
-/* Small helper to format date -> YYYY-MM-DD using local date (avoids UTC shift) */
-function formatDate(d: Date) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-/* Create sample attendance for a date */
-function createMockAttendanceForDate(date: string): AttendanceRecord[] {
-  return MOCK_CLASSES.map((c, idx) => {
-    const students = Array.from({ length: 30 }).map((_, i) => {
-      const studentId = `${c.id}-s${i + 1}`;
-      // deterministic-ish pseudo-random based on date/class/index
-      const hash = (date + c.id + i).split("").reduce((s, ch) => s + ch.charCodeAt(0), 0);
-      const presentProbability = 0.75 - ((idx * 0.03) + ((hash % 5) * 0.01));
-      const rnd = (hash % 100) / 100;
-      const status = rnd < presentProbability ? "present" : "absent";
-      return {
-        studentId,
-        name: `Student ${i + 1}`,
-        roll: `R${(i + 1).toString().padStart(3, "0")}`,
-        status: status as StudentAttendance["status"],
-        markedAt: new Date().toISOString(),
-      } as StudentAttendance;
-    });
-
-    return {
-      classId: c.id,
-      date,
-      students,
-    } as AttendanceRecord;
+  // UI state for creating a new attendance
+  const [creating, setCreating] = useState(false);
+  const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string>(() => {
+    const d = new Date();
+    // Ensure the date format is consistent: YYYY-MM-DD
+    return d.toISOString().slice(0, 10);
   });
-}
 
-/* Mock fetch: range query by date OR by month+year OR year */
-async function mockFetchAttendance({ date, month, year }: { date?: string; month?: number; year?: number; }): Promise<AttendanceRecord[]> {
-  await new Promise((r) => setTimeout(r, 180));
+  // small local cache for last created report to show instantly
+  const [lastCreatedReport, setLastCreatedReport] = useState<
+    AttendanceReport | null
+  >(null);
 
-  if (date) {
-    return createMockAttendanceForDate(date);
-  }
-
-  if (month != null && year != null) {
-    const days = new Date(year, month, 0).getDate(); // month is 1..12
-    const results: AttendanceRecord[] = [];
-    // return a sampling of days across the month (keeps response small)
-    const step = Math.max(1, Math.floor(days / 7));
-    for (let d = 1; d <= days; d += step) {
-      const day = new Date(year, month - 1, d);
-      results.push(...createMockAttendanceForDate(formatDate(day)));
-    }
-    return results;
-  }
-
-  if (year != null) {
-    const results: AttendanceRecord[] = [];
-    for (let m = 0; m < 12; m++) {
-      const day = new Date(year, m, Math.min(3, new Date(year, m + 1, 0).getDate()));
-      results.push(...createMockAttendanceForDate(formatDate(day)));
-    }
-    return results;
-  }
-
-  return createMockAttendanceForDate(formatDate(new Date()));
-}
-
-/* --------------------- Utility / UI Helpers --------------------- */
-function csvDownload(filename: string, rows: string[][]) {
-  const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
-  const blob = new Blob([csv], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-/* --------------------- Attendance Page Component --------------------- */
-export default function FacultyAttendancePage() {
-  // filter states
-  const [filterMode, setFilterMode] = useState<"date" | "month" | "year">("date");
-  const [date, setDate] = useState<string>(formatDate(new Date()));
-  const [month, setMonth] = useState<number>(new Date().getMonth() + 1); // 1..12
-  const [year, setYear] = useState<number>(new Date().getFullYear());
-  const [selectedClassId, setSelectedClassId] = useState<string>(""); // empty => all classes
-
-  // data state
-  const [records, setRecords] = useState<AttendanceRecord[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  // UI state for detail
-  const [activeRecord, setActiveRecord] = useState<AttendanceRecord | null>(null);
-  const [page, setPage] = useState(1);
-  const pageSize = 12;
-
-  // fetch when filter changes
+  // fetch reports for this faculty on mount / whenever profile changes
   useEffect(() => {
+    if (authLoading) return;
+    if (!profile || !user) return;
+
     let mounted = true;
-    (async () => {
+    const fetchReports = async () => {
       setLoading(true);
+      setError(null);
       try {
-        let res: AttendanceRecord[] = [];
-        if (filterMode === "date") {
-          res = await mockFetchAttendance({ date });
-        } else if (filterMode === "month") {
-          res = await mockFetchAttendance({ month, year });
-        } else {
-          res = await mockFetchAttendance({ year });
-        }
+        const facultyId = profile.id ?? user.id;
+        const res = await fetch(
+          `${API_LIST}?facultyId=${encodeURIComponent(facultyId)}`
+        );
+        if (!res.ok) throw new Error(`Failed to load reports (${res.status})`);
+        const data = (await res.json()) as AttendanceReport[];
         if (!mounted) return;
-        setRecords(res);
-        // auto-open appropriate record
-        const chosen = selectedClassId ? res.find((r) => r.classId === selectedClassId) ?? null : (res[0] ?? null);
-        setActiveRecord(chosen);
-        setPage(1);
-      } catch (err) {
-        console.error("fetch attendance failed", err);
+        setReports(data || []);
+      } catch (err: any) {
+        console.error("Error fetching attendance:", err);
+        if (mounted)
+          setError(
+            err?.message?.includes("Failed to load")
+              ? "Failed to load reports."
+              : err?.message ?? "Unable to load attendance"
+          );
       } finally {
         if (mounted) setLoading(false);
       }
-    })();
+    };
+
+    fetchReports();
     return () => {
       mounted = false;
     };
-  }, [filterMode, date, month, year, selectedClassId]);
+  }, [authLoading, profile, user]);
 
-  // summary per class (aggregated across fetched records)
-  const summaryByClass = useMemo(() => {
-    const map = new Map<string, { present: number; absent: number; total: number }>();
-    for (const rec of records) {
-      const cls = map.get(rec.classId) ?? { present: 0, absent: 0, total: 0 };
-      for (const s of rec.students) {
-        cls.total += 1;
-        if (s.status === "present") cls.present += 1;
-        else cls.absent += 1;
+  // Derived helpers
+  const recent = useMemo(() => {
+    // Sort descending by date (assuming report.date is ISO string or comparable)
+    return [...reports].sort((a, b) =>
+      (b.date || "").localeCompare(a.date || "")
+    );
+  }, [reports]);
+
+  const handleCreate = async () => {
+    if (!profile && !user) {
+      return navigate("/login");
+    }
+    if (!selectedClassId) {
+      setError("Please select a class first.");
+      return;
+    }
+
+    setCreating(true);
+    setError(null);
+
+    try {
+      const payload = {
+        facultyId: profile?.id ?? user.id,
+        classId: selectedClassId,
+        date: selectedDate,
+        // default empty students array here; you might populate using StudentsGrid flow
+        students: [],
+      };
+
+      const res = await fetch(API_CREATE, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(txt || `Create failed (${res.status})`);
       }
-      map.set(rec.classId, cls);
+
+      const created = (await res.json()) as AttendanceReport;
+      // optimistic update
+      setReports((prev) => [created, ...prev]);
+      setLastCreatedReport(created);
+    } catch (err: any) {
+      console.error("Create attendance error:", err);
+      setError(
+        err?.message?.includes("failed")
+          ? "Failed to create attendance."
+          : err?.message ?? "Unable to create attendance"
+      );
+    } finally {
+      setCreating(false);
     }
-    return map;
-  }, [records]);
+  };
 
-  const classList = MOCK_CLASSES; // ideally fetch classes from backend filtered by faculty
+  const handleOpen = (reportId: string) => {
+    // Navigate to a detail page (implement route if required)
+    navigate(`/faculty/attendance/${reportId}`);
+  };
 
-  // detail page rows for activeRecord (paginated)
-  const activeRows = useMemo(() => {
-    if (!activeRecord) return [] as StudentAttendance[];
-    const start = (page - 1) * pageSize;
-    return activeRecord.students.slice(start, start + pageSize);
-  }, [activeRecord, page]);
-
-  /* -------------------- UI Actions -------------------- */
-
-  function handleModeChange(m: "date" | "month" | "year") {
-    setFilterMode(m);
-    // sensible defaults
-    if (m === "date") setDate(formatDate(new Date()));
-    if (m === "month") {
-      const now = new Date();
-      setMonth(now.getMonth() + 1);
-      setYear(now.getFullYear());
+  /**
+   * Status badge component with enhanced styling.
+   * @param s AttendanceStatus
+   * @returns JSX.Element
+   */
+  const statusBadge = (s?: AttendanceStatus) => {
+    switch (s) {
+      case "PRESENT":
+        return (
+          <span className="inline-flex items-center gap-1 font-medium text-green-700 bg-green-100 px-3 py-1 rounded-full text-xs transition-colors duration-150">
+            <CheckCircle className="w-4 h-4" /> Present
+          </span>
+        );
+      case "ABSENT":
+        return (
+          <span className="inline-flex items-center gap-1 font-medium text-red-700 bg-red-100 px-3 py-1 rounded-full text-xs transition-colors duration-150">
+            <XCircle className="w-4 h-4" /> Absent
+          </span>
+        );
+      case "LATE":
+        return (
+          <span className="inline-flex items-center gap-1 font-medium text-amber-700 bg-amber-100 px-3 py-1 rounded-full text-xs transition-colors duration-150">
+            <Clock className="w-4 h-4" /> Late
+          </span>
+        );
+      default:
+        return (
+          <span className="inline-flex items-center gap-1 font-medium text-gray-700 bg-gray-200 px-3 py-1 rounded-full text-xs transition-colors duration-150">
+            <AlertTriangle className="w-4 h-4" /> Unknown
+          </span>
+        );
     }
-    if (m === "year") setYear(new Date().getFullYear());
-  }
+  };
 
-  function exportSummaryCSV() {
-    if (summaryByClass.size === 0) {
-      alert("No attendance summary to export for the selected filter.");
-      return;
-    }
-    const rows: string[][] = [["Class", "Present", "Absent", "Total"]];
-    for (const [classId, stats] of summaryByClass.entries()) {
-      const c = classList.find((x) => x.id === classId);
-      rows.push([c ? `${c.courseCode} - ${c.courseTitle}` : classId, String(stats.present), String(stats.absent), String(stats.total)]);
-    }
-    csvDownload(`attendance_summary_${filterMode}_${filterMode === "date" ? date : `${month}-${year}`}.csv`, rows);
-  }
-
-  function exportDetailCSV() {
-    if (!activeRecord) {
-      alert("Select a class record to export details.");
-      return;
-    }
-    if ((activeRecord.students?.length ?? 0) === 0) {
-      alert("No student detail to export for the selected record.");
-      return;
-    }
-    const rows: string[][] = [["StudentId", "Name", "Roll", "Status", "MarkedAt"]];
-    for (const s of activeRecord.students) {
-      rows.push([s.studentId, s.name, s.roll, s.status, s.markedAt ?? ""]);
-    }
-    csvDownload(`attendance_${activeRecord.classId}_${activeRecord.date}.csv`, rows);
-  }
-
-  function openRecordForClass(classId: string) {
-    setSelectedClassId(classId);
-    const found = records.find((r) => r.classId === classId);
-    setActiveRecord(found ?? null);
-    setPage(1);
-  }
-
-  /* -------------------- Render -------------------- */
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Attendance — Reports</h1>
-          <div className="text-sm text-slate-500 mt-1">Filter by date / month / year, and by class</div>
-          <div className="text-sm text-slate-600 mt-2">
-            <span className="mr-3">Classes: <strong>{classList.length}</strong></span>
-            <span>Records loaded: <strong>{records.length}</strong></span>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <button
-            onClick={exportSummaryCSV}
-            className="px-3 py-1 rounded border inline-flex items-center gap-2 text-sm"
-            disabled={summaryByClass.size === 0}
-            aria-disabled={summaryByClass.size === 0}
-          >
-            <Download className="w-4 h-4" /> Export Summary
-          </button>
-          <button
-            onClick={exportDetailCSV}
-            className="px-3 py-1 rounded bg-purple-600 text-white text-sm"
-            disabled={!activeRecord}
-            aria-disabled={!activeRecord}
-          >
-            <Download className="w-4 h-4" /> Export Details
-          </button>
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className="bg-white border rounded-lg p-4 flex flex-col md:flex-row gap-4 items-start md:items-center">
-        <div className="flex items-center gap-3">
-          <label className="text-sm text-slate-600">Filter</label>
-          <div className="inline-flex rounded-md overflow-hidden border">
-            <button
-              onClick={() => handleModeChange("date")}
-              className={`px-3 py-1 text-sm ${filterMode === "date" ? "bg-purple-600 text-white" : "bg-white text-slate-700"}`}
-            >
-              Date
-            </button>
-            <button
-              onClick={() => handleModeChange("month")}
-              className={`px-3 py-1 text-sm ${filterMode === "month" ? "bg-purple-600 text-white" : "bg-white text-slate-700"}`}
-            >
-              Month
-            </button>
-            <button
-              onClick={() => handleModeChange("year")}
-              className={`px-3 py-1 text-sm ${filterMode === "year" ? "bg-purple-600 text-white" : "bg-white text-slate-700"}`}
-            >
-              Year
-            </button>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3 flex-wrap">
-          {filterMode === "date" && (
+    <div className="min-h-[70vh] flex flex-col lg:flex-row gap-6 p-4">
+      {/* Left column: reports list & actions */}
+      <div className="w-full lg:w-2/3 bg-white rounded-xl p-6 shadow-xl border border-gray-100">
+        <div className="flex items-center justify-between mb-6 border-b pb-4">
+          <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+            <ClipboardList className="w-6 h-6 text-gray-700" />
+            Attendance Reports
+          </h2>
+          {/* Action controls group */}
+          <div className="flex items-center gap-3">
             <input
               type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="px-3 py-2 border rounded-md"
-              aria-label="Select date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="border border-gray-300 px-3 py-2 rounded-lg text-sm focus:ring-2 focus:ring-red-300 focus:border-red-500 transition-all"
+              aria-label="Attendance Date"
             />
-          )}
 
-          {filterMode === "month" && (
-            <>
-              <select
-                value={month}
-                onChange={(e) => setMonth(Number(e.target.value))}
-                className="px-3 py-2 border rounded-md"
-                aria-label="Select month"
-              >
-                {Array.from({ length: 12 }).map((_, i) => (
-                  <option key={i} value={i + 1}>
-                    {new Date(0, i).toLocaleString("default", { month: "long" })}
-                  </option>
-                ))}
-              </select>
-
-              <input
-                type="number"
-                value={year}
-                onChange={(e) => setYear(Number(e.target.value))}
-                className="px-3 py-2 border rounded-md w-28"
-                aria-label="Enter year"
-              />
-            </>
-          )}
-
-          {filterMode === "year" && (
-            <input
-              type="number"
-              value={year}
-              onChange={(e) => setYear(Number(e.target.value))}
-              className="px-3 py-2 border rounded-md w-36"
-              aria-label="Enter year"
-            />
-          )}
-
-          <div className="flex items-center gap-2">
-            <label className="text-sm text-slate-600">Class</label>
             <select
-              value={selectedClassId}
-              onChange={(e) => setSelectedClassId(e.target.value)}
-              className="px-3 py-2 border rounded-md"
-              aria-label="Select class"
+              value={selectedClassId ?? ""}
+              onChange={(e) => setSelectedClassId(e.target.value || null)}
+              className="border border-gray-300 px-3 py-2 rounded-lg text-sm bg-white focus:ring-2 focus:ring-red-300 focus:border-red-500 transition-all"
+              aria-label="Select Class"
             >
-              <option value="">All classes</option>
-              {classList.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.courseCode} — {c.courseTitle}
-                </option>
-              ))}
+              <option value="" disabled>
+                Select class
+              </option>
+              {/* TODO: replace these with dynamic classes from profile or API */}
+              <option value="CSE-2A">CSE - II A</option>
+              <option value="CSE-2B">CSE - II B</option>
+              <option value="MECH-1A">MECH - I A</option>
             </select>
-          </div>
 
-          <button
-            onClick={() => {
-              // manual refresh - triggers useEffect due to state
-              if (filterMode === "date") setDate((d) => d);
-              else if (filterMode === "month") setMonth((m) => m);
-              else setYear((y) => y);
-            }}
-            className="px-3 py-2 rounded bg-purple-600 text-white"
-            aria-busy={loading}
-            disabled={loading}
+            <button
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-white font-semibold transition-all duration-200 shadow-md ${
+                creating || !selectedClassId
+                  ? "bg-gray-400 cursor-not-allowed"
+                  : `bg-${PRIMARY_COLOR} hover:bg-[#600c10] active:bg-[#4d090c] hover:shadow-lg`
+              }`}
+              onClick={handleCreate}
+              disabled={creating || !selectedClassId}
+              aria-busy={creating}
+            >
+              <Send className="w-4 h-4" />
+              {creating ? "Creating..." : "Create Attendance"}
+            </button>
+          </div>
+        </div>
+
+        {error && (
+          <div
+            className="mb-6 rounded-lg bg-red-50 border border-red-300 px-4 py-3 text-sm font-medium text-red-800 flex items-center gap-2"
+            role="alert"
           >
-            {loading ? "Loading…" : "Apply"}
-          </button>
-        </div>
-      </div>
-
-      {/* Body: left summary (classes) + right detail */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-        {/* Left: Class summary */}
-        <div className="lg:col-span-1 bg-white border rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium">Classes</h3>
-            <div className="text-xs text-slate-500">{records.length} day(s) loaded</div>
+            <AlertTriangle className="w-5 h-5" />
+            **Error:** {error}
           </div>
+        )}
 
-          <div className="mt-3 space-y-2 max-h-[540px] overflow-y-auto">
-            {[...classList].map((c) => {
-              const stats = summaryByClass.get(c.id) ?? { present: 0, absent: 0, total: 0 };
-              return (
-                <button
-                  key={c.id}
-                  onClick={() => openRecordForClass(c.id)}
-                  className="w-full text-left p-2 rounded-md hover:bg-slate-50 flex items-center justify-between"
-                >
-                  <div>
-                    <div className="font-medium">{c.courseCode}</div>
-                    <div className="text-xs text-slate-500">{c.courseTitle}</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm font-semibold">{stats.present}/{stats.total}</div>
-                    <div className="text-xs text-slate-400">present</div>
-                  </div>
-                </button>
-              );
-            })}
+        {loading ? (
+          <div className="py-20 text-center text-lg text-gray-500">
+            <span className="animate-pulse">Loading reports...</span>
           </div>
-
-          <div className="mt-4 text-xs text-slate-500">Tip: pick a class to see student details for the selected filter.</div>
-        </div>
-
-        {/* Right: Detail / Table */}
-        <div className="lg:col-span-3 bg-white border rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-medium">
-                {activeRecord
-                  ? `Details — ${MOCK_CLASSES.find((c) => c.id === activeRecord.classId)?.courseCode ?? activeRecord.classId} (${activeRecord.date})`
-                  : "Select a class"}
-              </h3>
-              <div className="text-sm text-slate-500 mt-1">
-                {activeRecord ? `${activeRecord.students.length} students` : "No data"}
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <div className="text-sm text-slate-500">Page {page}</div>
-              <button
-                onClick={exportDetailCSV}
-                className="px-3 py-1 rounded border inline-flex items-center gap-2 text-sm"
-                disabled={!activeRecord}
-                aria-disabled={!activeRecord}
+        ) : recent.length === 0 ? (
+          <div className="py-20 text-center text-lg text-gray-500">
+            <AlertTriangle className="w-8 h-8 mx-auto mb-3 text-gray-400" />
+            <p>No attendance reports yet. Create one using the controls above.</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {recent.map((r) => (
+              <div
+                key={r.id}
+                className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 rounded-xl border border-gray-200 bg-gray-50 hover:bg-white hover:border-red-100 transition-all duration-200 shadow-sm hover:shadow-lg"
               >
-                <Download className="w-4 h-4" /> Export
-              </button>
-            </div>
+                {/* Report Details */}
+                <div>
+                  <div className="flex items-center flex-wrap gap-x-4 gap-y-1 mb-1">
+                    <h3 className="text-lg font-bold text-gray-900">
+                      {r.className ?? r.classId}
+                    </h3>
+                    <span className="text-sm text-gray-600 font-medium">
+                      {r.date ? new Date(r.date).toLocaleDateString() : 'Unknown Date'}
+                    </span>
+                    <span className="text-sm text-gray-400">•</span>
+                    <span className="text-sm text-gray-600">
+                      **{r.students?.length ?? 0}** Students
+                    </span>
+                  </div>
+                  <p className="mt-1 text-sm text-gray-500 italic">
+                    {r.notes ? `"${r.notes}"` : "No notes recorded."}
+                  </p>
+                </div>
+
+                {/* Actions and Status */}
+                <div className="flex items-center gap-3 mt-3 sm:mt-0 flex-shrink-0">
+                  {/* small summary badges */}
+                  {statusBadge(r.overallStatus)}
+
+                  <button
+                    onClick={() => handleOpen(r.id)}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-red-50 hover:text-red-700 transition-colors text-sm"
+                    title="Open report details"
+                  >
+                    <Eye className="w-4 h-4" /> View
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      // Quick re-open or edit — you may replace with edit modal
+                      navigate(`/faculty/attendance/${r.id}/edit`);
+                    }}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-red-50 hover:text-red-700 transition-colors text-sm"
+                    title="Edit report"
+                  >
+                    <Edit className="w-4 h-4" /> Edit
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Right column: StudentsGrid / QR panel (visual) */}
+      <aside className="w-full lg:w-1/3">
+        <div className="sticky top-6 space-y-6">
+          {/* QR generator panel: pass lastCreatedReport for quick QR context */}
+          <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-xl">
+            <h4 className="text-xl font-semibold mb-4 border-b pb-3 text-gray-800">
+              <Send className="w-5 h-5 inline mr-2 text-gray-600" />
+              QR Generation
+            </h4>
+            <GenerateQRPanel report={lastCreatedReport ?? recent[0] ?? null} />
           </div>
 
-          <div className="mt-4">
-            {loading ? (
-              <div className="py-8 text-center text-slate-500">Loading attendance…</div>
-            ) : !activeRecord ? (
-              <div className="py-8 text-center text-slate-500">No record selected</div>
-            ) : (
-              <>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm">
-                    <thead>
-                      <tr className="text-xs text-slate-500">
-                        <th scope="col" className="py-2 px-3">Roll</th>
-                        <th scope="col" className="py-2 px-3">Name</th>
-                        <th scope="col" className="py-2 px-3">Status</th>
-                        <th scope="col" className="py-2 px-3">Marked at</th>
-                      </tr>
-                    </thead>
-
-                    <tbody className="divide-y">
-                      {activeRows.map((s) => (
-                        <tr key={s.studentId}>
-                          <td className="py-3 px-3">{s.roll}</td>
-                          <td className="py-3 px-3">{s.name}</td>
-                          <td className="py-3 px-3">
-                            <span
-                              className={`px-2 py-0.5 rounded-full text-xs ${
-                                s.status === "present" ? "bg-green-100 text-green-800" : s.status === "absent" ? "bg-red-100 text-red-700" : "bg-yellow-50 text-yellow-700"
-                              }`}
-                            >
-                              {s.status}
-                            </span>
-                          </td>
-                          <td className="py-3 px-3">{s.markedAt ? new Date(s.markedAt).toLocaleTimeString() : "-"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Pagination */}
-                <div className="mt-4 flex items-center justify-between">
-                  <div className="text-xs text-slate-500">
-                    Showing {Math.min((page - 1) * pageSize + 1, activeRecord.students.length)}–{Math.min(page * pageSize, activeRecord.students.length)} of {activeRecord.students.length}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
-                      className="px-3 py-1 border rounded text-sm"
-                      disabled={page === 1}
-                      aria-disabled={page === 1}
-                    >
-                      Prev
-                    </button>
-                    <button
-                      onClick={() => setPage((p) => (p * pageSize < activeRecord.students.length ? p + 1 : p))}
-                      className="px-3 py-1 border rounded text-sm"
-                      disabled={page * pageSize >= activeRecord.students.length}
-                      aria-disabled={page * pageSize >= activeRecord.students.length}
-                    >
-                      Next
-                    </button>
-                  </div>
-                </div>
-              </>
-            )}
+          {/* StudentsGrid: if you want to show the students for the selected class/date */}
+          <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-xl">
+            <h4 className="text-xl font-semibold mb-4 border-b pb-3 text-gray-800">
+              <ClipboardList className="w-5 h-5 inline mr-2 text-gray-600" />
+              Class Roster
+            </h4>
+            {/* StudentsGrid should accept classId/date props — adjust if different */}
+            <StudentsGrid
+              classId={selectedClassId ?? (recent[0]?.classId ?? "")}
+              date={selectedDate}
+            />
+            <p className="mt-4 text-xs text-gray-400 italic">
+              * Showing roster for selected class and date.
+            </p>
           </div>
         </div>
-      </div>
+      </aside>
     </div>
   );
 }

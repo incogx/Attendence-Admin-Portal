@@ -1,13 +1,13 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { LogIn } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 
 /**
  * LoginForm
  * - Calls signIn(email, password)
  * - Sets postSignIn flag and waits for AuthContext.profile to appear
- * - When profile arrives, hard-navigates (window.location.replace) to the correct portal
+ * - When profile arrives, navigates to the correct portal (replace history)
  * - If profile never appears within fallback time, sends user to /no-access
  */
 export default function LoginForm() {
@@ -20,20 +20,23 @@ export default function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [postSignIn, setPostSignIn] = useState(false);
 
-  const submit = async (e?: React.FormEvent) => {
+  const submit = async (e?: React.FormEvent<HTMLFormElement>) => {
     e?.preventDefault();
     setError("");
     setLoading(true);
     setPostSignIn(false);
 
     try {
+      // If your AuthContext.signIn expects an object, adjust accordingly.
       await signIn(email.trim(), password);
       // Wait for AuthContext to populate profile; set flag
       setPostSignIn(true);
     } catch (err: any) {
+      // Better error message parsing if signIn returns structured error
       setError(err?.message ?? "Sign in failed");
       setLoading(false);
       setPostSignIn(false);
+      console.error("Login error:", err);
     }
   };
 
@@ -43,18 +46,17 @@ export default function LoginForm() {
     // If AuthContext is still loading, wait
     if (authLoading) return;
 
-    // If profile exists, route to proper portal using hard replace
+    // If profile exists, route to proper portal using navigate with replace
     if (profile) {
       const role = (profile.role ?? "").toString().toUpperCase().trim();
       if (role === "ADMIN") {
-        // hard replace to remove login from history
-        window.location.replace("/admin");
+        navigate("/admin", { replace: true });
       } else if (role === "HOD") {
-        window.location.replace("/hod");
+        navigate("/hod", { replace: true });
       } else if (role === "FACULTY") {
-        window.location.replace("/faculty");
+        navigate("/faculty", { replace: true });
       } else {
-        window.location.replace("/no-access");
+        navigate("/no-access", { replace: true });
       }
       setLoading(false);
       setPostSignIn(false);
@@ -63,15 +65,14 @@ export default function LoginForm() {
 
     // fallback: if profile doesn't arrive in 10s, avoid leaving user stuck
     const to = setTimeout(() => {
-      if (postSignIn) {
-        setLoading(false);
-        setPostSignIn(false);
-        window.location.replace("/no-access");
-      }
+      // Only run fallback if still waiting
+      setLoading(false);
+      setPostSignIn(false);
+      navigate("/no-access", { replace: true });
     }, 10000);
 
     return () => clearTimeout(to);
-  }, [profile, postSignIn, authLoading]);
+  }, [profile, postSignIn, authLoading, navigate]);
 
   return (
     <div className="relative min-h-screen w-full flex items-center justify-center bg-[#f7f7f7] overflow-hidden">
@@ -126,6 +127,7 @@ export default function LoginForm() {
               className="mt-1 w-full px-4 py-3 rounded-lg border border-gray-300 bg-gray-50 focus:outline-none 
                         focus:ring-2 focus:ring-[#7A0D15]/20 text-gray-800 placeholder-gray-400"
               autoComplete="email"
+              disabled={loading}
             />
           </div>
 
@@ -140,18 +142,19 @@ export default function LoginForm() {
               className="mt-1 w-full px-4 py-3 rounded-lg border border-gray-300 bg-gray-50 focus:outline-none 
                         focus:ring-2 focus:ring-[#7A0D15]/20 text-gray-800 placeholder-gray-400"
               autoComplete="current-password"
+              disabled={loading}
             />
           </div>
 
           <div className="flex items-center justify-between text-sm text-gray-500">
             <label className="flex items-center gap-2">
-              <input type="checkbox" className="h-4 w-4" />
+              <input type="checkbox" className="h-4 w-4" disabled={loading} />
               Remember me
             </label>
 
-            <a href="/forgot-password" className="text-[#7A0D15] hover:underline">
+            <Link to="/forgot-password" className="text-[#7A0D15] hover:underline">
               Forgot password?
-            </a>
+            </Link>
           </div>
 
           <button

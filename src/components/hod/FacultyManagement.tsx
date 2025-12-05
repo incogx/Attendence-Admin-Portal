@@ -1,6 +1,126 @@
 // src/components/hod/FacultyManagement.tsx
 import React, { useEffect, useMemo, useState } from "react";
-import { Download, Trash2, Edit } from "lucide-react";
+import { Download, Trash2, Edit, UserPlus } from "lucide-react";
+
+/**
+ * RequestFacultyModal: modal for requesting new faculty accounts (sent to admin)
+ */
+function RequestFacultyModal({ open, onClose, onRequested }: { open: boolean; onClose: ()=>void; onRequested?: ()=>void; }) {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [dept, setDept] = useState("");
+  const [phone, setPhone] = useState("");
+  const [reason, setReason] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  if (!open) return null;
+
+  async function submit() {
+    if (!name || !email || !dept || !reason) return alert("All fields are required");
+    setLoading(true);
+    try {
+      // Mock request submission to admin
+      await new Promise(r => setTimeout(r, 200));
+      // In real app: send request to admin via API/supabase
+      alert("Faculty addition request sent to Admin for approval");
+      setName(""); setEmail(""); setDept(""); setPhone(""); setReason("");
+      onRequested?.();
+      onClose();
+    } catch (err) {
+      console.error(err);
+      alert("Request failed");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center" role="dialog" aria-modal>
+      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="relative bg-white rounded-lg p-6 w-[min(640px,94%)]">
+        <h3 className="text-lg font-medium">Request Faculty Addition</h3>
+        <div className="text-sm text-slate-500 mt-1">This request will be sent to Admin for approval</div>
+        <div className="mt-4 space-y-3">
+          <input className="w-full px-3 py-2 border rounded" placeholder="Full name" value={name} onChange={e=>setName(e.target.value)} />
+          <input className="w-full px-3 py-2 border rounded" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} />
+          <input className="w-full px-3 py-2 border rounded" placeholder="Department (e.g. CSE)" value={dept} onChange={e=>setDept(e.target.value)} />
+          <input className="w-full px-3 py-2 border rounded" placeholder="Phone (optional)" value={phone} onChange={e=>setPhone(e.target.value)} />
+          <textarea
+            className="w-full px-3 py-2 border rounded"
+            placeholder="Reason for addition (required)"
+            value={reason}
+            onChange={e=>setReason(e.target.value)}
+            rows={3}
+          />
+        </div>
+
+        <div className="mt-4 flex justify-end gap-2">
+          <button onClick={onClose} className="px-4 py-2 rounded border">Cancel</button>
+          <button onClick={submit} disabled={loading} className="px-4 py-2 rounded bg-purple-600 text-white">{loading ? "Sending..." : "Send Request"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * EditFacultyModal: small modal form for editing faculty accounts
+ */
+function EditFacultyModal({ faculty, open, onClose, onUpdated }: { faculty: Faculty | null; open: boolean; onClose: ()=>void; onUpdated?: ()=>void; }) {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [dept, setDept] = useState("");
+  const [phone, setPhone] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (faculty) {
+      setName(faculty.name);
+      setEmail(faculty.email);
+      setDept(faculty.dept);
+      setPhone(faculty.phone || "");
+    }
+  }, [faculty]);
+
+  if (!open || !faculty) return null;
+
+  async function submit() {
+    if (!name || !email || !dept) return alert("Name, email and dept required");
+    setLoading(true);
+    try {
+      // Mock update
+      await new Promise(r => setTimeout(r, 200));
+      // In real app: supabase.from('faculty').update({ full_name: name, email, dept, phone }).eq('id', faculty.id)
+      onUpdated?.();
+      onClose();
+    } catch (err) {
+      console.error(err);
+      alert("Update failed");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center" role="dialog" aria-modal>
+      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="relative bg-white rounded-lg p-6 w-[min(640px,94%)]">
+        <h3 className="text-lg font-medium">Edit Faculty</h3>
+        <div className="mt-4 space-y-3">
+          <input className="w-full px-3 py-2 border rounded" placeholder="Full name" value={name} onChange={e=>setName(e.target.value)} />
+          <input className="w-full px-3 py-2 border rounded" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} />
+          <input className="w-full px-3 py-2 border rounded" placeholder="Department (e.g. CSE)" value={dept} onChange={e=>setDept(e.target.value)} />
+          <input className="w-full px-3 py-2 border rounded" placeholder="Phone (optional)" value={phone} onChange={e=>setPhone(e.target.value)} />
+        </div>
+
+        <div className="mt-4 flex justify-end gap-2">
+          <button onClick={onClose} className="px-4 py-2 rounded border">Cancel</button>
+          <button onClick={submit} disabled={loading} className="px-4 py-2 rounded bg-purple-600 text-white">{loading ? "Updating..." : "Update"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /**
  * FacultyManagement
@@ -19,6 +139,8 @@ export default function FacultyManagement() {
   const [list, setList] = useState<Faculty[]>([]);
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
+  const [showRequestModal, setShowRequestModal] = useState(false);
+  const [editingFaculty, setEditingFaculty] = useState<Faculty | null>(null);
   const pageSize = 10;
   useEffect(() => { (async ()=> setList(await mockFetchFaculty()))(); }, []);
 
@@ -45,10 +167,18 @@ export default function FacultyManagement() {
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-lg font-medium">Faculty Management</h3>
-          <div className="text-sm text-slate-500">Add, edit and remove faculty accounts</div>
+          <div className="text-sm text-slate-500">Request faculty additions, edit and remove faculty accounts</div>
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowRequestModal(true)}
+            className="flex items-center space-x-2 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors shadow-sm"
+            aria-label="Request Faculty Addition"
+          >
+            <UserPlus className="w-5 h-5" />
+            <span className="font-medium">Request Faculty</span>
+          </button>
           <input className="px-3 py-2 border rounded-md" placeholder="Search by name or email" value={query} onChange={e=>{setQuery(e.target.value); setPage(1);}} />
           <button onClick={exportCSV} className="px-3 py-2 rounded border inline-flex items-center gap-2 text-sm"><Download className="w-4 h-4" /> Export</button>
         </div>
@@ -69,7 +199,7 @@ export default function FacultyManagement() {
                   <td className="py-3 px-3">{f.phone}</td>
                   <td className="py-3 px-3">
                     <div className="flex gap-2">
-                      <button onClick={()=> alert("Edit not implemented - navigate to edit form")} className="px-2 py-1 rounded border inline-flex items-center gap-2 text-sm"><Edit className="w-4 h-4" /> Edit</button>
+                      <button onClick={()=> setEditingFaculty(f)} className="px-2 py-1 rounded border inline-flex items-center gap-2 text-sm"><Edit className="w-4 h-4" /> Edit</button>
                       <button onClick={()=> deleteFaculty(f.id)} className="px-2 py-1 rounded border text-red-600 inline-flex items-center gap-2 text-sm"><Trash2 className="w-4 h-4" /> Delete</button>
                     </div>
                   </td>
@@ -87,6 +217,10 @@ export default function FacultyManagement() {
           </div>
         </div>
       </div>
+
+      {/* Modals */}
+      <RequestFacultyModal open={showRequestModal} onClose={() => setShowRequestModal(false)} onRequested={() => setShowRequestModal(false)} />
+      <EditFacultyModal faculty={editingFaculty} open={!!editingFaculty} onClose={() => setEditingFaculty(null)} onUpdated={() => setEditingFaculty(null)} />
     </div>
   );
 }

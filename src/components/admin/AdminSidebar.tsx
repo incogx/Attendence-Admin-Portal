@@ -9,7 +9,9 @@ import {
   Shield,
   Plus,
   Menu,
-  X
+  X,
+  FileText,
+  MessageSquare
 } from "lucide-react";
 
 type NavItemProps = {
@@ -136,6 +138,12 @@ export default function AdminSidebar() {
                   <span className="hidden md:inline">Add</span>
                 </NavLink>
               </NavLink>
+            </div>
+
+            {/* Attendance Management */}
+            <div className="mb-4">
+              <NavItem to="/admin/attendance" label="Attendance Management" icon={<FileText className="w-4 h-4" />} onClick={closeMobile} />
+              <NavItem to="/admin/messaging" label="Messaging System" icon={<MessageSquare className="w-4 h-4" />} onClick={closeMobile} />
             </div>
 
             {/* Other Sections */}

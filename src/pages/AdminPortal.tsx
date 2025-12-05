@@ -15,14 +15,27 @@ import NotificationCenter from "../components/Notifications/NotificationCenter";
 import ContentModeration from "../components/Moderation/ContentModeration";
 import SettingsView from "../components/Settings/SettingsView";
 
+// admin attendance management (ensure this file exists at this path)
+import AttendanceManagement from "../components/admin/AttendanceManagement";
+
+// real messaging system (create file at src/components/admin/MessagingSystem.tsx)
+import MessagingSystem from "../components/admin/MessagingSystem";
+
 export default function AdminPortal() {
   return (
     <div className="min-h-screen flex bg-gray-50">
-      <AdminSidebar />
+      {/* Sidebar (fixed width) */}
+      <div className="w-72 flex-shrink-0">
+        <div className="h-screen sticky top-0">
+          <AdminSidebar />
+        </div>
+      </div>
+
+      {/* Main area */}
       <div className="flex-1 flex flex-col">
         <AdminHeader />
 
-        <main className="p-8">
+        <main className="p-8 w-full">
           <Routes>
             {/* default dashboard */}
             <Route path="/" element={<DashboardPanel />} />
@@ -36,6 +49,11 @@ export default function AdminPortal() {
             <Route path="analytics" element={<AnalyticsView />} />
             <Route path="notifications" element={<NotificationCenter />} />
             <Route path="moderation" element={<ContentModeration />} />
+            <Route path="attendance" element={<AttendanceManagement />} />
+
+            {/* messaging */}
+            <Route path="messaging" element={<MessagingSystem />} />
+
             <Route path="settings" element={<SettingsView />} />
 
             {/* add more admin routes here as needed */}
