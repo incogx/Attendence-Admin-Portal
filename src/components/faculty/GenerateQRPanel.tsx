@@ -23,7 +23,7 @@ type ScanRecord = { id: string; studentId: string; name: string; roll: string; s
 type AttendanceFinalizePayload = { classId: string; date: string; presentStudentIds: string[] };
 
 /* ------------------------ CONFIG / CONSTANTS --------------------- */
-const TOKEN_ROTATION_MS = 15000; // rotate token every 15s
+const TOKEN_ROTATION_MS = 1500; // rotate token every 1.5s
 const POLL_SCANS_MS = 4000; // poll scans every 4s
 
 /* ------------------------ MOCKED API (REPLACE) ------------------- */
@@ -209,15 +209,18 @@ export default function GenerateQRPanel() {
   useEffect(() => {
     if (!sessionId || !token) return;
     rotationRef.current = window.setInterval(async () => {
-      const newToken = `${selectedClass?.id ?? "class"}::${uuidv4()}`;
-      try {
-        // update backend token
-        await mockRotateSessionToken(sessionId, newToken);
-        setToken(newToken);
-      } catch (err) {
-        console.error("rotate failed", err);
-      }
-    }, TOKEN_ROTATION_MS);
+      if (!selectedClass || !sessionId) return;
+
+      const newToken = `${selectedClass.id}::${uuidv4()}`;
+
+    try {
+    await mockRotateSessionToken(sessionId, newToken);
+    setToken(newToken); // triggers QR re-render instantly
+  } catch (err) {
+    console.error("Token rotation failed", err);
+  }
+}, TOKEN_ROTATION_MS);
+
 
     return () => {
       if (rotationRef.current) {
@@ -359,7 +362,10 @@ export default function GenerateQRPanel() {
             {isActive ? (
               <>
                 <div>Session: <span className="font-mono text-xs">{sessionId}</span></div>
-                <div className="mt-1 text-xs text-slate-400">Token rotates every {Math.round(TOKEN_ROTATION_MS / 1000)}s</div>
+                <div className="mt-1 text-xs text-slate-400">
+                    Auto-refresh every 1.5s (Anti-proxy enabled)
+                </div>
+                
               </>
             ) : (
               <div className="text-xs text-slate-400">No active live session</div>

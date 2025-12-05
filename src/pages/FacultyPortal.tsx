@@ -6,7 +6,6 @@ import FacultySidebar from "../components/faculty/FacultySidebar";
 import FacultyHeader from "../components/faculty/FacultyHeader";
 
 import FacultyDashboard from "../components/faculty/FacultyDashboard";
-import FacultyClasses from "../components/faculty/FacultyClasses";
 import GenerateQRPanel from "../components/faculty/GenerateQRPanel";
 import AttendancePage from "../components/faculty/AttendancePage";
 
@@ -28,7 +27,6 @@ export default function FacultyPortal() {
 
             {/* faculty-specific pages */}
             <Route path="today" element={<FacultyDashboard />} />
-            <Route path="classes" element={<FacultyClasses />} />
             <Route path="generate-qr" element={<GenerateQRPanel />} />
             <Route path="attendance" element={<AttendancePage />} />
 

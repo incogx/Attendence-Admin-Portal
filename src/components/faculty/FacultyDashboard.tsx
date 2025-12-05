@@ -282,40 +282,7 @@ export default function FacultyDashboard() {
           </div>
         </Card>
 
-        <Card>
-          <div className="text-sm text-slate-500">Live QR</div>
-          <div className="mt-2">
-            {liveQrToken ? (
-              <div className="flex items-center gap-3">
-                <div className="text-xs break-all text-slate-700 max-w-[240px]">{liveQrToken}</div>
-                <button
-                  onClick={() => {
-                    navigator.clipboard?.writeText(liveQrToken);
-                  }}
-                  className="px-3 py-1 rounded-md bg-gray-100 text-sm"
-                >
-                  Copy
-                </button>
-                <button onClick={stopLiveQr} className="px-3 py-1 rounded-md bg-red-50 text-red-600 text-sm">
-                  Stop
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-3">
-                <div className="text-sm text-slate-500">No active session</div>
-                <button
-                  onClick={() => {
-                    // start for first class as example
-                    if (timetable[0]) startLiveQrForClass(timetable[0].id);
-                  }}
-                  className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-purple-600 text-white text-sm"
-                >
-                  <QrCode className="w-4 h-4" /> Start Live QR
-                </button>
-              </div>
-            )}
-          </div>
-        </Card>
+        
 
         <Card>
           <div className="text-sm text-slate-500">Current Time</div>

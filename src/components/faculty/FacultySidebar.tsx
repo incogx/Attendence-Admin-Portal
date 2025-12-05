@@ -105,20 +105,6 @@ export default function FacultySidebar() {
 
             <div className="mb-4 space-y-2">
               <NavItem
-                to="/faculty/today"
-                label="Today’s Classes"
-                icon={<CalendarDays className="w-4 h-4" />}
-                onClick={closeMobile}
-              />
-
-              <NavItem
-                to="/faculty/classes"
-                label="Classes"
-                icon={<BookOpen className="w-4 h-4" />}
-                onClick={closeMobile}
-              />
-
-              <NavItem
                 to="/faculty/generate-qr"
                 label="Generate QR"
                 icon={<QrCode className="w-4 h-4" />}
