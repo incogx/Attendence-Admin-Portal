@@ -1,9 +1,9 @@
-// src/components/admin/AdminHeader.tsx
+// src/components/faculty/FacultyHeader.tsx
 import React, { useEffect, useRef, useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
-/* Avatar (unchanged) */
+/* Avatar shared with admin style */
 function Avatar({ name, size = 40 }: { name?: string | null; size?: number }) {
   const initials =
     (name || "")
@@ -31,7 +31,7 @@ function Avatar({ name, size = 40 }: { name?: string | null; size?: number }) {
   );
 }
 
-/* Apple style sign-out modal (kept small) */
+/* Reusable Apple-style sign-out modal (keeps parity with admin modal) */
 function AppleSignOutModal({
   open,
   title = "Sign out",
@@ -55,6 +55,7 @@ function AppleSignOutModal({
     }
     if (open) {
       window.addEventListener("keydown", onKey);
+      // small focus for accessibility
       setTimeout(() => dialogRef.current?.focus(), 50);
     }
     return () => window.removeEventListener("keydown", onKey);
@@ -67,8 +68,8 @@ function AppleSignOutModal({
       className="fixed inset-0 z-[120] flex items-center justify-center"
       role="dialog"
       aria-modal="true"
-      aria-labelledby="apple-signout-title"
-      aria-describedby="apple-signout-desc"
+      aria-labelledby="faculty-signout-title"
+      aria-describedby="faculty-signout-desc"
     >
       <div
         className="absolute inset-0 bg-black/35 backdrop-blur-sm"
@@ -96,10 +97,10 @@ function AppleSignOutModal({
           </div>
 
           <div className="min-w-0 flex-1">
-            <h3 id="apple-signout-title" className="text-lg font-medium text-gray-900">
+            <h3 id="faculty-signout-title" className="text-lg font-medium text-gray-900">
               {title}
             </h3>
-            <p id="apple-signout-desc" className="mt-1 text-sm text-gray-600">
+            <p id="faculty-signout-desc" className="mt-1 text-sm text-gray-600">
               {description}
             </p>
 
@@ -127,60 +128,49 @@ function AppleSignOutModal({
   );
 }
 
-export default function AdminHeader() {
+export default function FacultyHeader({
+  title = "Faculty Portal",
+  subtitle = "Manage attendance",
+}: {
+  title?: string;
+  subtitle?: string;
+}) {
+  // use your auth context — signOut should be provided there (similar to admin)
   const { user, profile, signOut } = useAuth() as any;
   const navigate = useNavigate();
-  const location = useLocation();
 
   const [menuOpen, setMenuOpen] = useState(false);
-  const [loadingSignOut, setLoadingSignOut] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
-
+  const [loadingSignOut, setLoadingSignOut] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const mobileMenuRef = useRef<HTMLDivElement | null>(null);
   const firstMenuItemRef = useRef<HTMLButtonElement | null>(null);
 
-  // compute normalized role and base path
-  const roleRaw = profile?.role ?? "";
-  const role = typeof roleRaw === "string" ? roleRaw.toUpperCase().trim() : roleRaw;
-  const basePath = role === "ADMIN" ? "/admin" : role === "HOD" ? "/hod" : role === "FACULTY" ? "/faculty" : "";
+  // display name and role
+  const displayName = profile?.full_name ?? user?.user_metadata?.full_name ?? user?.email ?? "Faculty";
+  const role = "FACULTY";
 
-  // If a non-admin lands on /admin, immediately redirect them to their portal (replace)
+  // Updated time (simple two-digit hour:minute)
+  const [time, setTime] = useState("");
   useEffect(() => {
-    if (!role) return; // don't act until we know role
-    if (location.pathname.startsWith("/admin") && role !== "ADMIN") {
-      // redirect off admin area
-      if (role === "HOD") window.location.replace("/hod");
-      else if (role === "FACULTY") window.location.replace("/faculty");
-      else window.location.replace("/no-access");
-    }
-    // If a non-HOD lands on /hod, redirect
-    if (location.pathname.startsWith("/hod") && role !== "HOD") {
-      if (role === "ADMIN") window.location.replace("/admin");
-      else if (role === "FACULTY") window.location.replace("/faculty");
-      else window.location.replace("/no-access");
-    }
-    // If non-FACULTY lands on /faculty, redirect
-    if (location.pathname.startsWith("/faculty") && role !== "FACULTY") {
-      if (role === "ADMIN") window.location.replace("/admin");
-      else if (role === "HOD") window.location.replace("/hod");
-      else window.location.replace("/no-access");
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [role, location.pathname]);
+    const now = new Date();
+    setTime(now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }));
+  }, []);
 
-  // Close dropdown on outside click or Escape
+  // close menus when clicking outside or pressing Escape
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
       const target = e.target as Node;
       const desktopContains = menuRef.current?.contains(target);
       const mobileContains = mobileMenuRef.current?.contains(target);
-      if (!desktopContains && !mobileContains) {
-        setMenuOpen(false);
-      }
+      if (!desktopContains && !mobileContains) setMenuOpen(false);
     }
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setMenuOpen(false);
+      if (e.key === "Escape") {
+        setMenuOpen(false);
+        setMobileOpen(false);
+      }
     }
     document.addEventListener("mousedown", onDocClick);
     document.addEventListener("keydown", onKey);
@@ -190,19 +180,15 @@ export default function AdminHeader() {
     };
   }, []);
 
-  // focus first item when opening menu
   useEffect(() => {
     if (menuOpen) setTimeout(() => firstMenuItemRef.current?.focus(), 50);
   }, [menuOpen]);
-
-  const displayName = profile?.full_name ?? user?.user_metadata?.full_name ?? user?.email ?? "Admin";
 
   async function doSignOut() {
     try {
       setLoadingSignOut(true);
       await signOut();
 
-      // Clear local storage and session storage to avoid stale state
       try {
         localStorage.clear();
         sessionStorage.clear();
@@ -210,7 +196,7 @@ export default function AdminHeader() {
         console.warn("storage clear failed", err);
       }
 
-      // Hard replace to /login so Back cannot return to protected pages
+      // replace to login so Back can't return to protected pages
       window.location.replace("/login");
     } catch (err) {
       console.error("Sign out failed:", err);
@@ -221,23 +207,19 @@ export default function AdminHeader() {
   }
 
   function handleSignOutClick() {
+    setMenuOpen(false);
     setConfirmOpen(true);
   }
 
-  // Role-aware navigation helpers
   function goProfile() {
     setMenuOpen(false);
-    if (!basePath) return navigate("/no-access", { replace: true });
-    navigate(`${basePath}/profile`, { replace: true });
-  }
-  function goSettings() {
-    setMenuOpen(false);
-    if (!basePath) return navigate("/no-access", { replace: true });
-    navigate(`${basePath}/settings`, { replace: true });
+    navigate("/faculty/profile", { replace: true });
   }
 
-  // Only admins see analytics/notifications in menu
-  const showAdminItems = role === "ADMIN";
+  function goSettings() {
+    setMenuOpen(false);
+    navigate("/faculty/settings", { replace: true });
+  }
 
   return (
     <>
@@ -246,11 +228,11 @@ export default function AdminHeader() {
           <div className="flex items-center justify-between h-16">
             {/* Left */}
             <div className="flex items-center gap-4">
-              <h2 className="text-lg font-semibold text-gray-900">Admin Portal</h2>
-              <p className="hidden sm:block text-sm text-gray-500">Manage HOD, Faculty and view analytics</p>
+              <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+              <p className="hidden sm:block text-sm text-gray-500">{subtitle}</p>
             </div>
 
-            {/* Right: Profile / actions */}
+            {/* Right */}
             <div className="flex items-center gap-4">
               <div className="hidden sm:flex items-center gap-3 text-right">
                 <div>
@@ -259,7 +241,7 @@ export default function AdminHeader() {
                   </div>
                   <div className="text-xs mt-0.5">
                     <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
-                      {role ? role : "ADMIN"}
+                      {role}
                     </span>
                   </div>
                 </div>
@@ -311,35 +293,8 @@ export default function AdminHeader() {
                           Settings
                         </button>
 
-                        {showAdminItems && (
-                          <>
-                            <button
-                              onClick={() => {
-                                setMenuOpen(false);
-                                navigate("/admin/notifications", { replace: true });
-                              }}
-                              role="menuitem"
-                              className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 focus:outline-none"
-                            >
-                              Notifications
-                            </button>
-
-                            <button
-                              onClick={() => {
-                                setMenuOpen(false);
-                                navigate("/admin/analytics", { replace: true });
-                              }}
-                              role="menuitem"
-                              className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 focus:outline-none"
-                            >
-                              Analytics
-                            </button>
-                          </>
-                        )}
-
                         <button
                           onClick={() => {
-                            setMenuOpen(false);
                             handleSignOutClick();
                           }}
                           disabled={loadingSignOut}
@@ -397,30 +352,6 @@ export default function AdminHeader() {
                       >
                         Settings
                       </button>
-
-                      {showAdminItems && (
-                        <>
-                          <button
-                            onClick={() => {
-                              setMenuOpen(false);
-                              navigate("/admin/notifications", { replace: true });
-                            }}
-                            className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                          >
-                            Notifications
-                          </button>
-
-                          <button
-                            onClick={() => {
-                              setMenuOpen(false);
-                              navigate("/admin/analytics", { replace: true });
-                            }}
-                            className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                          >
-                            Analytics
-                          </button>
-                        </>
-                      )}
                     </div>
                   </div>
                 )}
