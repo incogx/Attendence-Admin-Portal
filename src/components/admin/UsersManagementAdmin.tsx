@@ -1,10 +1,10 @@
 // src/components/admin/UserManagement.tsx
 import { Plus, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import dayjs from "dayjs";
 import AddUserModal from "./AddUserModal";
+import { listUsers, deleteUser, UserProfile } from "../../lib/supabaseAdmin";
 
 type ProfileRow = {
   id: string;
@@ -17,8 +17,6 @@ type ProfileRow = {
 };
 
 export default function UserManagement() {
-  const { user, profile, loading } = useAuth() as any;
-
   const [searchTerm, setSearchTerm] = useState("");
   const [profiles, setProfiles] = useState<ProfileRow[]>([]);
   const [loadingProfiles, setLoadingProfiles] = useState(false);
@@ -29,50 +27,18 @@ export default function UserManagement() {
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   useEffect(() => {
-    if (!loading) fetchProfiles();
+    fetchProfiles();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading]);
+  }, []);
 
-  // ---------- REPLACED fetchProfiles: robust debug-friendly version ----------
+  // ---------- REPLACED fetchProfiles: use new supabaseAdmin functions ----------
   async function fetchProfiles() {
     setLoadingProfiles(true);
     setToast(null);
 
     try {
-      // Use Vite env or fallback to localhost:4001 (make sure .env has VITE_API_BASE)
-      const API_BASE = (import.meta.env.VITE_API_BASE as string) || "http://localhost:4001/api";
-      const ADMIN_SECRET = (import.meta.env.VITE_ADMIN_SECRET as string) || "";
-
-      const res = await fetch(`${API_BASE}/admin/list-users`, {
-        method: "GET",
-        headers: {
-          "Accept": "application/json",
-          ...(ADMIN_SECRET ? { "x-admin-secret": ADMIN_SECRET } : {}),
-        },
-      });
-
-      // read text first to show helpful debug if server returned HTML
-      const text = await res.text();
-
-      try {
-        const data = JSON.parse(text);
-        if (!res.ok) {
-          const msg = data?.error || data?.message || `Server returned ${res.status}`;
-          throw new Error(msg);
-        }
-        setProfiles((data.users ?? []) as ProfileRow[]);
-      } catch (parseErr) {
-        console.error(
-          "Failed to parse JSON from /admin/list-users. status:",
-          res.status,
-          "responseText (first 1000 chars):",
-          text.slice(0, 1000)
-        );
-        setToast({
-          type: "error",
-          message: "Failed to load users (server returned non-JSON). Check server logs or API_BASE.",
-        });
-      }
+      const users = await listUsers();
+      setProfiles(users);
     } catch (err: any) {
       console.error("Failed to fetch profiles:", err);
       setToast({ type: "error", message: "Failed to load users." });
@@ -94,41 +60,15 @@ export default function UserManagement() {
   }, [profiles, searchTerm]);
 
   async function handleDelete(id: string) {
-    if (!confirm("Delete this user profile? This cannot be undone from client.")) return;
+    if (!confirm("Delete this user profile? This cannot be undone.")) return;
     setDeleteLoadingId(id);
 
-    // Try server-side delete endpoint first (recommended)
     try {
-      const API_BASE = (import.meta.env.VITE_API_BASE as string) || "http://localhost:4001/api";
-      const ADMIN_SECRET = (import.meta.env.VITE_ADMIN_SECRET as string) || "";
-
-      const res = await fetch(`${API_BASE}/admin/delete-user`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(ADMIN_SECRET ? { "x-admin-secret": ADMIN_SECRET } : {}),
-        },
-        body: JSON.stringify({ id }),
-      });
-
-      if (res.ok) {
-        setToast({ type: "success", message: "User deleted (server)." });
-        await fetchProfiles();
-        setDeleteLoadingId(null);
-        return;
-      }
-    } catch (err) {
-      console.info("Server delete endpoint not available, falling back to client profiles delete.");
-    }
-
-    // Fallback: remove profile row only via Supabase client
-    try {
-      const { error } = await supabase.from("profiles").delete().eq("id", id);
-      if (error) throw error;
-      setToast({ type: "success", message: "Profile removed." });
+      await deleteUser(id);
+      setToast({ type: "success", message: "User deleted." });
       await fetchProfiles();
     } catch (err) {
-      console.error("Failed to delete profile:", err);
+      console.error("Failed to delete user:", err);
       setToast({ type: "error", message: "Delete failed." });
     } finally {
       setDeleteLoadingId(null);

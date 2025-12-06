@@ -1,5 +1,6 @@
 // src/components/admin/AddUserForm.tsx
 import React, { useState } from "react";
+import { createUser } from "../../lib/supabaseAdmin";
 
 type Role = "HOD" | "FACULTY" | "ADMIN";
 
@@ -74,52 +75,27 @@ export default function AddUserForm({
 
     setLoading(true);
     try {
-      // Build payload: server expects email, full_name, role. We also send password (temp or custom) if any.
-      const payload: any = {
-        email: email.trim(),
-        full_name: fullName.trim(),
-        role: role,
-        department: department.trim() || null,
-        phone: phone.trim() || null,
-      };
-      if (password) payload.password = password;
+      // Build payload using the new createUser function
+      const profile = await createUser(
+        email.trim(),
+        fullName.trim(),
+        role as 'HOD' | 'FACULTY' | 'ADMIN',
+        autoGenerate ? undefined : password,
+        department.trim() || undefined,
+        phone.trim() || undefined
+      );
 
-      // Dev header: change this for production to use proper admin auth
-      const ADMIN_SECRET = process.env.REACT_APP_ADMIN_SECRET || "";
-
-      const res = await fetch("/api/admin/create-user", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(ADMIN_SECRET ? { "x-admin-secret": ADMIN_SECRET } : {}),
-        },
-        body: JSON.stringify(payload),
-      });
-
-      const body = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        // server returned an error object, try to show its message
-        const message = (body && (body.error || body.message)) || `Server responded ${res.status}`;
-        setServerError(message);
-        setLoading(false);
-        return;
-      }
-
-      // success
       setSuccessMsg("User created successfully.");
-      setLoading(false);
-      // keep generated password visible for copying (security: don't persist in DB on client)
-      if (onCreated) onCreated(body.profile ?? body.user ?? body);
+      if (onCreated) onCreated(profile);
 
-      // clear only certain fields, keep password visible so admin can copy if needed
+      // Clear form
       setFullName("");
       setEmail("");
       setDepartment("");
       setPhone("");
-      // keep password and autoGenerate state as-is so admin can copy it
     } catch (err: any) {
-      setServerError(err?.message || "Network error");
+      setServerError(err?.message || "Failed to create user");
+    } finally {
       setLoading(false);
     }
   }
