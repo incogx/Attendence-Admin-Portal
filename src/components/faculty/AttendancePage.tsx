@@ -5,19 +5,22 @@ import {
   Edit,
   Send,
   Eye,
-  Clock,
-  CheckCircle,
-  XCircle,
   AlertTriangle,
-  ClipboardList, // New icon for the main title
+  ClipboardList,
+  Play,
 } from "lucide-react";
 
-import { AttendanceReport, AttendanceStatus } from "../../types/attendance";
 import { useAuth } from "../../contexts/AuthContext";
 
-// Reuse your components (they exist in faculty folder)
-import StudentsGrid from "./AttendanceReports"; // Assuming this is actually StudentsGrid as the panel below suggests
-import GenerateQRPanel from "./GenerateQRPanel";
+// Local attendance type for this page (mock only)
+type AttendanceReportLocal = {
+  id: string;
+  classId?: string;
+  className?: string;
+  date?: string;
+  notes?: string;
+  students?: { id: string; status?: string }[];
+};
 
 /**
  * AttendancePage
@@ -34,9 +37,6 @@ import GenerateQRPanel from "./GenerateQRPanel";
  * - useAuth() returns: { user, profile, loading }
  */
 
-const API_LIST = "/api/attendance";
-const API_CREATE = "/api/attendance";
-
 // Define a professional primary color for the system, e.g., a deep indigo or university maroon
 const PRIMARY_COLOR = "[#7A0D15]"; // Your existing deep maroon color
 
@@ -44,7 +44,7 @@ export default function AttendancePage() {
   const navigate = useNavigate();
   const { user, profile, loading: authLoading } = useAuth() as any;
 
-  const [reports, setReports] = useState<AttendanceReport[]>([]);
+  const [reports, setReports] = useState<AttendanceReportLocal[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,47 +57,28 @@ export default function AttendancePage() {
     return d.toISOString().slice(0, 10);
   });
 
-  // small local cache for last created report to show instantly
-  const [lastCreatedReport, setLastCreatedReport] = useState<
-    AttendanceReport | null
-  >(null);
+  // Live session mock state for QR panel
+  const [liveStarted, setLiveStarted] = useState(false);
+  const [liveToken, setLiveToken] = useState<string | null>(null);
+  const [scanned, setScanned] = useState<string[]>([]);
 
-  // fetch reports for this faculty on mount / whenever profile changes
+  // With no backend, seed mock data once when auth is ready
   useEffect(() => {
     if (authLoading) return;
-    if (!profile || !user) return;
-
-    let mounted = true;
-    const fetchReports = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const facultyId = profile.id ?? user.id;
-        const res = await fetch(
-          `${API_LIST}?facultyId=${encodeURIComponent(facultyId)}`
-        );
-        if (!res.ok) throw new Error(`Failed to load reports (${res.status})`);
-        const data = (await res.json()) as AttendanceReport[];
-        if (!mounted) return;
-        setReports(data || []);
-      } catch (err: any) {
-        console.error("Error fetching attendance:", err);
-        if (mounted)
-          setError(
-            err?.message?.includes("Failed to load")
-              ? "Failed to load reports."
-              : err?.message ?? "Unable to load attendance"
-          );
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    };
-
-    fetchReports();
-    return () => {
-      mounted = false;
-    };
-  }, [authLoading, profile, user]);
+    setLoading(true);
+    setError(null);
+    const today = new Date().toISOString().slice(0, 10);
+    const mock: AttendanceReportLocal[] = [
+      {
+        id: "sample-faculty-1",
+        classId: "CS201",
+        date: today,
+        students: [],
+      },
+    ];
+    setReports(mock);
+    setLoading(false);
+  }, [authLoading]);
 
   // Derived helpers
   const recent = useMemo(() => {
@@ -120,36 +101,17 @@ export default function AttendancePage() {
     setError(null);
 
     try {
-      const payload = {
-        facultyId: profile?.id ?? user.id,
+      // Local mock creation
+      const mock: AttendanceReportLocal = {
+        id: `local-${Date.now()}`,
         classId: selectedClassId,
         date: selectedDate,
-        // default empty students array here; you might populate using StudentsGrid flow
         students: [],
       };
-
-      const res = await fetch(API_CREATE, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(txt || `Create failed (${res.status})`);
-      }
-
-      const created = (await res.json()) as AttendanceReport;
-      // optimistic update
-      setReports((prev) => [created, ...prev]);
-      setLastCreatedReport(created);
+      setReports((prev) => [mock, ...prev]);
     } catch (err: any) {
       console.error("Create attendance error:", err);
-      setError(
-        err?.message?.includes("failed")
-          ? "Failed to create attendance."
-          : err?.message ?? "Unable to create attendance"
-      );
+      setError(err?.message ?? "Unable to create attendance");
     } finally {
       setCreating(false);
     }
@@ -165,34 +127,7 @@ export default function AttendancePage() {
    * @param s AttendanceStatus
    * @returns JSX.Element
    */
-  const statusBadge = (s?: AttendanceStatus) => {
-    switch (s) {
-      case "PRESENT":
-        return (
-          <span className="inline-flex items-center gap-1 font-medium text-green-700 bg-green-100 px-3 py-1 rounded-full text-xs transition-colors duration-150">
-            <CheckCircle className="w-4 h-4" /> Present
-          </span>
-        );
-      case "ABSENT":
-        return (
-          <span className="inline-flex items-center gap-1 font-medium text-red-700 bg-red-100 px-3 py-1 rounded-full text-xs transition-colors duration-150">
-            <XCircle className="w-4 h-4" /> Absent
-          </span>
-        );
-      case "LATE":
-        return (
-          <span className="inline-flex items-center gap-1 font-medium text-amber-700 bg-amber-100 px-3 py-1 rounded-full text-xs transition-colors duration-150">
-            <Clock className="w-4 h-4" /> Late
-          </span>
-        );
-      default:
-        return (
-          <span className="inline-flex items-center gap-1 font-medium text-gray-700 bg-gray-200 px-3 py-1 rounded-full text-xs transition-colors duration-150">
-            <AlertTriangle className="w-4 h-4" /> Unknown
-          </span>
-        );
-    }
-  };
+  // No status badge for mock data
 
   return (
     <div className="min-h-[70vh] flex flex-col lg:flex-row gap-6 p-4">
@@ -291,9 +226,6 @@ export default function AttendancePage() {
 
                 {/* Actions and Status */}
                 <div className="flex items-center gap-3 mt-3 sm:mt-0 flex-shrink-0">
-                  {/* small summary badges */}
-                  {statusBadge(r.overallStatus)}
-
                   <button
                     onClick={() => handleOpen(r.id)}
                     className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-red-50 hover:text-red-700 transition-colors text-sm"
@@ -319,32 +251,101 @@ export default function AttendancePage() {
         )}
       </div>
 
-      {/* Right column: StudentsGrid / QR panel (visual) */}
+      {/* Right column: simple mock QR panel */}
       <aside className="w-full lg:w-1/3">
         <div className="sticky top-6 space-y-6">
-          {/* QR generator panel: pass lastCreatedReport for quick QR context */}
           <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-xl">
-            <h4 className="text-xl font-semibold mb-4 border-b pb-3 text-gray-800">
-              <Send className="w-5 h-5 inline mr-2 text-gray-600" />
-              QR Generation
+            <h4 className="text-xl font-semibold mb-4 border-b pb-3 text-gray-800 flex items-center gap-2">
+              <Send className="w-5 h-5 inline text-gray-600" />
+              Live Session / QR
             </h4>
-            <GenerateQRPanel report={lastCreatedReport ?? recent[0] ?? null} />
-          </div>
 
-          {/* StudentsGrid: if you want to show the students for the selected class/date */}
-          <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-xl">
-            <h4 className="text-xl font-semibold mb-4 border-b pb-3 text-gray-800">
-              <ClipboardList className="w-5 h-5 inline mr-2 text-gray-600" />
-              Class Roster
-            </h4>
-            {/* StudentsGrid should accept classId/date props — adjust if different */}
-            <StudentsGrid
-              classId={selectedClassId ?? (recent[0]?.classId ?? "")}
-              date={selectedDate}
-            />
-            <p className="mt-4 text-xs text-gray-400 italic">
-              * Showing roster for selected class and date.
-            </p>
+            <div className="space-y-3">
+              <div className="text-sm text-gray-600">Class</div>
+              <div className="text-base font-semibold">{selectedClassId || "Select a class"}</div>
+              <div className="text-xs text-gray-500">Date: {selectedDate}</div>
+
+              <div className="flex flex-wrap gap-2 mt-2">
+                {!liveStarted ? (
+                  <button
+                    onClick={() => {
+                      setLiveStarted(true);
+                      setLiveToken(`session-${Date.now()}`);
+                      setScanned([]);
+                    }}
+                    className="inline-flex items-center gap-2 rounded bg-green-600 text-white px-4 py-2 text-sm hover:bg-green-700"
+                  >
+                    <Play className="w-4 h-4" /> Start Live Session
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setLiveStarted(false);
+                      setLiveToken(null);
+                    }}
+                    className="inline-flex items-center gap-2 rounded bg-red-600 text-white px-4 py-2 text-sm hover:bg-red-700"
+                  >
+                    Stop Session
+                  </button>
+                )}
+
+                <button
+                  onClick={() => {
+                    if (!liveStarted || !liveToken) return alert("Start session first");
+                    const id = `S-${String(scanned.length + 1).padStart(3, "0")}`;
+                    setScanned((prev) => [...prev, id]);
+                  }}
+                  className="inline-flex items-center gap-2 rounded border px-4 py-2 text-sm bg-white"
+                  disabled={!liveStarted}
+                >
+                  Mock Scan
+                </button>
+              </div>
+
+              <div className="mt-4 rounded border bg-gray-50 p-4 text-center min-h-[140px] flex items-center justify-center">
+                {liveStarted && liveToken ? (
+                  <div className="space-y-2 text-gray-700 text-sm">
+                    <div className="text-xs text-gray-400">QR Token</div>
+                    <div className="font-mono text-xs break-all">{liveToken}</div>
+                    <div className="text-green-600 font-semibold text-xs">Session Active</div>
+                  </div>
+                ) : (
+                  <div className="text-gray-400 text-sm">Start session to generate QR</div>
+                )}
+              </div>
+
+              <div className="mt-4">
+                <div className="flex items-center justify-between text-sm text-gray-700 mb-2">
+                  <span>Scanned Students</span>
+                  <span className="text-xs text-gray-500">Count: {scanned.length}</span>
+                </div>
+                <div className="space-y-1 max-h-40 overflow-auto text-sm">
+                  {scanned.length === 0 ? (
+                    <div className="text-gray-400 text-sm text-center py-2">No students scanned yet.</div>
+                  ) : (
+                    scanned.map((s) => (
+                      <div key={s} className="px-2 py-1 bg-green-50 rounded text-green-700">{s}</div>
+                    ))
+                  )}
+                </div>
+                <div className="mt-3 flex gap-2 justify-end">
+                  <button
+                    onClick={() => setScanned([])}
+                    className="px-3 py-1 border rounded text-sm hover:bg-gray-50"
+                    disabled={!liveStarted}
+                  >
+                    Clear
+                  </button>
+                  <button
+                    onClick={() => alert(`Submitted ${scanned.length} attendance records`)}
+                    className="px-4 py-1 bg-purple-600 text-white rounded text-sm"
+                    disabled={!liveStarted}
+                  >
+                    Submit ({scanned.length})
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </aside>

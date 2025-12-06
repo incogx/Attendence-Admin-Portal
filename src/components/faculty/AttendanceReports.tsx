@@ -27,8 +27,9 @@ type AttendanceReport = {
   students?: AttendanceEntry[];
 };
 
-const API_LIST = "/api/admin/attendance";
-const API_CREATE = "/api/admin/attendance";
+// No backend endpoint now; we fall back to mock data
+const API_LIST = "";
+const API_CREATE = "";
 
 function sampleReports(): AttendanceReport[] {
   const today = new Date().toISOString().slice(0, 10);
@@ -67,63 +68,11 @@ export default function AttendanceReports() {
 
   useEffect(() => {
     if (authLoading) return;
-    if (useMock) { setReports(sampleReports()); return; }
-
-    let mounted = true;
-    const load = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        // Simple fetch without complex logic
-        const res = await fetch(API_LIST, { credentials: "include" });
-
-        if (!res.ok) {
-          console.warn(`API returned ${res.status}, using empty data`);
-          if (mounted) {
-            setReports([]);
-            setLoading(false);
-          }
-          return;
-        }
-
-        const text = await res.text();
-        if (!text) {
-          if (mounted) {
-            setReports([]);
-            setLoading(false);
-          }
-          return;
-        }
-
-        let data;
-        try {
-          data = JSON.parse(text);
-        } catch (e) {
-          console.warn("Failed to parse response, using empty", e);
-          if (mounted) {
-            setReports([]);
-            setLoading(false);
-          }
-          return;
-        }
-
-        const arr = Array.isArray(data) ? data : Array.isArray(data?.data) ? data.data : [];
-        if (mounted) {
-          setReports(arr);
-          setLoading(false);
-        }
-      } catch (err: any) {
-        console.error("AttendanceReports fetch error:", err);
-        if (mounted) {
-          setReports([]);
-          setLoading(false);
-        }
-      }
-    };
-
-    load();
-    return () => { mounted = false; };
-  }, [authLoading, useMock]);
+    // With no backend endpoint, default to mock data to keep UI working
+    setReports(sampleReports());
+    setUseMock(true);
+    setError(null);
+  }, [authLoading]);
 
   const list = useMemo(() => (reports ?? []), [reports]);
 
@@ -131,31 +80,17 @@ export default function AttendanceReports() {
     setError(null);
     setLoading(true);
     try {
-      const payload = {
-        facultyId: profile?.id ?? user?.id,
+      // No backend: create a local mock record
+      const mock: AttendanceReport = {
+        id: `local-${Date.now()}`,
         classId,
+        className: classId,
         date,
         semester: "Fall 2025",
-        entries: [],
+        notes: "Local mock entry",
+        students: [],
       };
-      const res = await fetch(API_CREATE, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        if (res.status === 404) setError("Create failed (404) — endpoint not found.");
-        else {
-          const txt = await res.text().catch(() => "");
-          setError(`Create failed (${res.status})${txt ? `: ${txt}` : ""}`);
-        }
-        setLoading(false);
-        return;
-      }
-
-      const created = await res.json().catch(() => null);
-      setReports((prev) => (created ? [created, ...(prev ?? [])] : prev));
+      setReports((prev) => [mock, ...(prev ?? [])]);
     } catch (err: any) {
       console.error("Create error:", err);
       setError(String(err?.message ?? "Create failed"));
@@ -192,6 +127,20 @@ export default function AttendanceReports() {
     }
     // Mock download - in production, generate actual QR code PNG
     alert(`QR Code downloaded:\n${liveSession.qrCode}`);
+  }
+
+  function handleView(r: AttendanceReport) {
+    // No detail page yet; keep a safe stub to avoid runtime errors
+    console.log("View attendance", r.id);
+  }
+
+  function handleMockScan() {
+    if (!liveSession?.started) {
+      alert("Start live session first");
+      return;
+    }
+    const id = `S-${String(scannedStudents.length + 1).padStart(3, "0")}`;
+    setScannedStudents((prev) => [...prev, id]);
   }
 
   function handleExport(r: AttendanceReport) {
@@ -303,86 +252,7 @@ export default function AttendanceReports() {
           </div>
         )}
       </div>
-
-      {/* BELOW: Generate QR / Live Session panel (Image 2 style) */}
-      <div className="bg-white border rounded-2xl p-6">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <h3 className="text-lg font-semibold text-slate-900">Generate QR — Live Session</h3>
-            <p className="text-sm text-slate-500 mt-1">Display QR, review scanned students and submit attendance.</p>
           </div>
-
-          <div className="flex items-center gap-3">
-            <select className="rounded-lg border px-4 py-2 text-sm bg-white">
-              <option>CS201 — Data Structures (09:00-09:50)</option>
-              <option>CS301 — Operating Systems (10:30-11:20)</option>
-            </select>
-
-            {!liveSession?.started ? (
-              <>
-                <button onClick={handleStartLiveSession} className="inline-flex items-center gap-2 rounded bg-green-600 text-white px-4 py-2 text-sm hover:bg-green-700">
-                  <Play className="w-4 h-4" /> Start Live Session
-                </button>
-                <button onClick={handleDownloadQR} className="inline-flex items-center gap-2 rounded border px-4 py-2 text-sm bg-white" disabled>Download QR</button>
-              </>
-            ) : (
-              <>
-                <button onClick={handleStopLiveSession} className="inline-flex items-center gap-2 rounded bg-red-600 text-white px-4 py-2 text-sm hover:bg-red-700">
-                  Stop Session
-                </button>
-                <button onClick={handleDownloadQR} className="inline-flex items-center gap-2 rounded border px-4 py-2 text-sm bg-white">Download QR</button>
-              </>
-            )}
-          </div>
-        </div>
-
-        <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="rounded-lg border p-6 text-center min-h-[220px] flex flex-col items-center justify-center bg-slate-50">
-            <div className="text-sm text-slate-400 mb-2">Class</div>
-            <div className="font-medium text-lg">CS201 • Data Structures</div>
-            <div className="text-xs text-slate-400 mt-1">09:00 - 09:50 • Lab 3</div>
-
-            {liveSession?.started ? (
-              <div className="mt-6 w-48 h-48 bg-white rounded border flex items-center justify-center text-center">
-                <div className="text-sm text-slate-600">
-                  <div className="font-mono text-xs break-all mb-2">{liveSession.qrCode}</div>
-                  <div className="text-xs text-green-600 font-medium">Live Session Active</div>
-                </div>
-              </div>
-            ) : (
-              <div className="mt-6 w-48 h-48 bg-slate-100 rounded border flex items-center justify-center text-slate-400">
-                Start session to generate QR
-              </div>
-            )}
-
-            <div className="text-xs text-slate-400 mt-4">{liveSession?.started ? "✓ Active session" : "No active live session"}</div>
-          </div>
-
-          <div className="rounded-lg border p-6 min-h-[220px] flex flex-col bg-white">
-            <div className="flex items-center justify-between mb-4">
-              <div className="text-lg font-medium">Scanned Students</div>
-              <div className="text-xs text-slate-400">Count: {scannedStudents.length}</div>
-            </div>
-
-            <div className="flex-1 flex flex-col gap-2">
-              {scannedStudents.length === 0 ? (
-                <div className="flex items-center justify-center text-slate-500">No students scanned yet.</div>
-              ) : (
-                <div className="space-y-1 text-sm">
-                  {scannedStudents.map((id, idx) => (
-                    <div key={idx} className="px-2 py-1 bg-green-50 rounded text-green-700">Student {id}</div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="mt-4 flex items-center gap-3 justify-end">
-              <button onClick={() => setScannedStudents([])} className="px-3 py-1 border rounded text-sm hover:bg-gray-50">Clear</button>
-              <button onClick={() => alert(`Submitted ${scannedStudents.length} attendance records`)} className="px-4 py-1 bg-purple-600 text-white rounded text-sm">Submit Attendance ({scannedStudents.length})</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+      
   );
 }
