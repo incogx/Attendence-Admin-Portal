@@ -2,7 +2,7 @@ import React from "react";
 import FacultyHeader from "../components/faculty/FacultyHeader";
 import FacultySidebar from "../components/faculty/FacultySidebar";
 import FacultyDashboard from "../components/faculty/FacultyDashboard";
-import GenerateQRPanel from "../components/faculty/GenerateQRPanel";
+import GenerateQRPage from "../components/faculty/GenerateQRPage";
 import CreateAttendancePage from "../components/faculty/CreateAttendancePage";
 import AttendancePage from "../components/faculty/AttendancePage";
 import { Route, Routes } from "react-router-dom";
@@ -25,7 +25,7 @@ export default function FacultyPortal() {
           <main className="px-6 py-6 max-w-7xl mx-auto">
             <Routes>
               <Route index element={<FacultyDashboard />} />
-              <Route path="generate-qr" element={<GenerateQRPanel />} />
+              <Route path="generate-qr" element={<GenerateQRPage />} />
               <Route path="create-attendance" element={<CreateAttendancePage />} />
               <Route path="attendance" element={<AttendancePage />} />
               <Route path="notifications" element={<NotificationCenter />} />

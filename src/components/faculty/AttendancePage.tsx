@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "../../contexts/AuthContext";
+import { supabase } from "../../lib/supabase";
 
 // Local attendance type for this page (mock only)
 type AttendanceReportLocal = {
@@ -57,28 +58,49 @@ export default function AttendancePage() {
     return d.toISOString().slice(0, 10);
   });
 
-  // Live session mock state for QR panel
+  // Live session state for QR panel
   const [liveStarted, setLiveStarted] = useState(false);
   const [liveToken, setLiveToken] = useState<string | null>(null);
   const [scanned, setScanned] = useState<string[]>([]);
 
-  // With no backend, seed mock data once when auth is ready
+  // Load real attendance sessions from database
   useEffect(() => {
     if (authLoading) return;
-    setLoading(true);
-    setError(null);
-    const today = new Date().toISOString().slice(0, 10);
-    const mock: AttendanceReportLocal[] = [
-      {
-        id: "sample-faculty-1",
-        classId: "CS201",
-        date: today,
-        students: [],
-      },
-    ];
-    setReports(mock);
-    setLoading(false);
-  }, [authLoading]);
+    if (!profile && !user) return;
+
+    const fetchSessions = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const { data, error } = await supabase
+          .from('attendance_sessions')
+          .select('*')
+          .eq('faculty_id', profile?.id || user?.id)
+          .order('started_at', { ascending: false })
+          .limit(10);
+
+        if (error) throw error;
+        
+        const mapped: AttendanceReportLocal[] = (data || []).map((s: any) => ({
+          id: s.id,
+          classId: s.class_no,
+          className: s.class_no,
+          date: s.session_date,
+          notes: `Status: ${s.status}`,
+          students: [],
+        }));
+        
+        setReports(mapped);
+      } catch (err: any) {
+        console.error('Failed to load sessions:', err);
+        setError(err.message || 'Failed to load attendance sessions');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchSessions();
+  }, [authLoading, profile, user]);
 
   // Derived helpers
   const recent = useMemo(() => {
@@ -101,14 +123,33 @@ export default function AttendancePage() {
     setError(null);
 
     try {
-      // Local mock creation
-      const mock: AttendanceReportLocal = {
-        id: `local-${Date.now()}`,
-        classId: selectedClassId,
-        date: selectedDate,
+      // Create real attendance session
+      const { data, error } = await supabase
+        .from('attendance_sessions')
+        .insert([{
+          class_no: selectedClassId,
+          faculty_id: profile?.id || user.id,
+          faculty_name: profile?.full_name || user?.email || 'Unknown',
+          department: profile?.department || 'N/A',
+          session_date: selectedDate,
+          status: 'ACTIVE',
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      const newReport: AttendanceReportLocal = {
+        id: data.id,
+        classId: data.class_no,
+        className: data.class_no,
+        date: data.session_date,
+        notes: `Status: ${data.status}`,
         students: [],
       };
-      setReports((prev) => [mock, ...prev]);
+
+      setReports((prev) => [newReport, ...prev]);
+      alert('Attendance session created! Go to Generate QR to start taking attendance.');
     } catch (err: any) {
       console.error("Create attendance error:", err);
       setError(err?.message ?? "Unable to create attendance");

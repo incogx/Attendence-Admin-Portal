@@ -5,6 +5,7 @@ import HodSidebar from "../components/hod/HodSidebar";
 import HodDashboard from "../components/hod/HodDashboard";
 import FacultyManagement from "../components/hod/FacultyManagement";
 import DepartmentAttendance from "../components/hod/DepartmentAttendance";
+import HodApprovals from "../components/hod/HodApprovals";
 
 import NotificationCenter from "../components/Notifications/NotificationCenter";
 import SettingsView from "../components/Settings/SettingsView";
@@ -32,6 +33,7 @@ export default function HodPortal() {
             <Route index element={<HodDashboard />} />
             <Route path="faculty" element={<FacultyManagement />} />
             <Route path="attendance" element={<DepartmentAttendance />} />
+            <Route path="approvals" element={<HodApprovals />} />
             <Route path="notifications" element={<NotificationCenter />} />
             <Route path="settings" element={<SettingsView />} />
           </Routes>

@@ -1,7 +1,7 @@
 // src/components/hod/HodSidebar.tsx
 import React, { useState } from "react";
 import { NavLink } from "react-router-dom";
-import { BarChart3, Users, QrCode, CheckSquare, Bell, Settings, Menu, X } from "lucide-react";
+import { BarChart3, Users, QrCode, CheckSquare, Bell, Settings, Menu, X, ClipboardCheck } from "lucide-react";
 
 type NavItemProps = {
   to: string;
@@ -69,6 +69,7 @@ export default function HodSidebar() {
             <NavItem to="/hod" label="Dashboard" icon={<BarChart3 className="w-5 h-5" />} onClick={close} end />
             <NavItem to="/hod/faculty" label="Faculty" icon={<Users className="w-5 h-5" />} onClick={close} />
             <NavItem to="/hod/attendance" label="Department Attendance" icon={<CheckSquare className="w-5 h-5" />} onClick={close} />
+            <NavItem to="/hod/approvals" label="Approvals" icon={<ClipboardCheck className="w-5 h-5" />} onClick={close} />
             <NavItem to="/hod/notifications" label="Notifications" icon={<Bell className="w-5 h-5" />} onClick={close} />
             <NavItem to="/hod/settings" label="Settings" icon={<Settings className="w-5 h-5" />} onClick={close} />
           </nav>
@@ -110,6 +111,7 @@ export default function HodSidebar() {
             <NavItem to="/hod" label="Dashboard" icon={<BarChart3 className="w-5 h-5" />} onClick={close} end />
             <NavItem to="/hod/faculty" label="Faculty" icon={<Users className="w-5 h-5" />} onClick={close} />
             <NavItem to="/hod/attendance" label="Department Attendance" icon={<CheckSquare className="w-5 h-5" />} onClick={close} />
+            <NavItem to="/hod/approvals" label="Approvals" icon={<ClipboardCheck className="w-5 h-5" />} onClick={close} />
             <NavItem to="/hod/notifications" label="Notifications" icon={<Bell className="w-5 h-5" />} onClick={close} />
             <NavItem to="/hod/settings" label="Settings" icon={<Settings className="w-5 h-5" />} onClick={close} />
           </nav>
